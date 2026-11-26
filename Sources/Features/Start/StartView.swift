@@ -2,18 +2,23 @@ import SwiftUI
 
 struct StartView: View {
     @EnvironmentObject private var routineStore: RoutineStore
+    @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
 
     @State private var isShowingCreateRoutine: Bool = false
     @State private var editingRoutine: RoutineWithExercises? = nil
     @State private var routineToDelete: RoutineWithExercises? = nil
-    @State private var isShowingPhase3Hint: Bool = false
+    @State private var isShowingAlreadyActiveAlert: Bool = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section(header: Text("Schnellstart")) {
                     Button {
-                        isShowingPhase3Hint = true
+                        if activeWorkoutManager.hasActiveWorkout {
+                            isShowingAlreadyActiveAlert = true
+                        } else {
+                            activeWorkoutManager.startEmptyWorkout()
+                        }
                     } label: {
                         HStack {
                             Image(systemName: "play.fill")
@@ -64,7 +69,11 @@ struct StartView: View {
                             RoutineCardRow(
                                 item: item,
                                 onStart: {
-                                    isShowingPhase3Hint = true
+                                    if activeWorkoutManager.hasActiveWorkout {
+                                        isShowingAlreadyActiveAlert = true
+                                    } else {
+                                        activeWorkoutManager.startWorkout(from: item)
+                                    }
                                 },
                                 onEdit: {
                                     editingRoutine = item
@@ -130,23 +139,29 @@ struct StartView: View {
             } message: { item in
                 Text("Die Routine „\(item.routine.name)“ wird entfernt. Vergangene Workouts bleiben im Verlauf erhalten.")
             }
-            .alert("Folgt in Phase 3", isPresented: $isShowingPhase3Hint) {
-                Button("OK", role: .cancel) {}
+            .alert("Workout läuft bereits", isPresented: $isShowingAlreadyActiveAlert) {
+                Button("Laufendes Workout öffnen") {
+                    activeWorkoutManager.isPresentingSheet = true
+                }
+                Button("Abbrechen", role: .cancel) {}
             } message: {
-                Text("Das aktive Workout-Logging (Sätze, Gewicht, Wiederholungen & Vorher-Werte) kommt im nächsten Schritt in Phase 3.")
+                Text("Du hast aktuell ein aktives Workout. Beende oder verwirf es zuerst, bevor du ein neues startest.")
             }
             .alert(
                 "Fehler",
                 isPresented: Binding(
-                    get: { routineStore.errorMessage != nil },
+                    get: { routineStore.errorMessage != nil || activeWorkoutManager.errorMessage != nil },
                     set: { isPresented in
-                        if !isPresented { routineStore.errorMessage = nil }
+                        if !isPresented {
+                            routineStore.errorMessage = nil
+                            activeWorkoutManager.errorMessage = nil
+                        }
                     }
                 )
             ) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(routineStore.errorMessage ?? "")
+                Text(routineStore.errorMessage ?? activeWorkoutManager.errorMessage ?? "")
             }
         }
     }
@@ -246,5 +261,6 @@ struct StartView_Previews: PreviewProvider {
         StartView()
             .environmentObject(RoutineStore(database: db))
             .environmentObject(ExerciseStore(database: db))
+            .environmentObject(ActiveWorkoutManager(database: db))
     }
 }

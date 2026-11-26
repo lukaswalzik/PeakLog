@@ -1,0 +1,304 @@
+import SwiftUI
+import UIKit
+
+struct ActiveWorkoutView: View {
+    @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+
+    @State private var workoutName: String = ""
+    @State private var workoutNotes: String = ""
+    @State private var isShowingExercisePicker: Bool = false
+    @State private var isShowingFinishAlert: Bool = false
+    @State private var isShowingDiscardAlert: Bool = false
+    @State private var hasLoadedHeader: Bool = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let detail = activeWorkoutManager.activeWorkout {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            headerCard(detail: detail)
+
+                            if detail.exercises.isEmpty {
+                                VStack(spacing: 10) {
+                                    Image(systemName: "dumbbell")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(.secondary)
+                                    Text("Noch keine Übungen")
+                                        .font(.headline)
+                                    Text("Füge deine erste Übung hinzu, um Sätze zu loggen.")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 28)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            } else {
+                                ForEach(detail.exercises) { exerciseDetail in
+                                    exerciseCard(exerciseDetail)
+                                }
+                            }
+
+                            VStack(spacing: 12) {
+                                Button {
+                                    isShowingExercisePicker = true
+                                } label: {
+                                    Label("Übung hinzufügen", systemImage: "plus.circle.fill")
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                }
+                                .buttonStyle(.borderedProminent)
+
+                                Button(role: .destructive) {
+                                    isShowingDiscardAlert = true
+                                } label: {
+                                    Text("Workout verwerfen")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                            .padding(.top, 4)
+                            .padding(.bottom, 24)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                    }
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    .onAppear {
+                        if !hasLoadedHeader {
+                            workoutName = detail.workout.name
+                            workoutNotes = detail.workout.notes ?? ""
+                            hasLoadedHeader = true
+                        }
+                    }
+                } else {
+                    EmptyStateView(
+                        systemImage: "checkmark.circle",
+                        title: "Kein aktives Workout",
+                        message: "Starte ein Training im Tab „Start“."
+                    )
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        dismissKeyboard()
+                        activeWorkoutManager.isPresentingSheet = false
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.headline)
+                    }
+                    .accessibilityLabel("Workout minimieren")
+                }
+
+                ToolbarItem(placement: .principal) {
+                    if let startedAt = activeWorkoutManager.activeWorkout?.workout.startedAt {
+                        TimelineView(.periodic(from: .now, by: 1.0)) { context in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                                Text(Formatters.elapsedDuration(from: startedAt, to: context.date))
+                                    .font(.headline)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Beenden") {
+                        dismissKeyboard()
+                        isShowingFinishAlert = true
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                    .disabled(activeWorkoutManager.activeWorkout == nil)
+                }
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Fertig") {
+                        dismissKeyboard()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            .sheet(isPresented: $isShowingExercisePicker) {
+                ExercisePickerView { pickedExercises in
+                    activeWorkoutManager.addExercises(pickedExercises)
+                }
+            }
+            .alert("Workout abschließen?", isPresented: $isShowingFinishAlert) {
+                Button("Abschließen", role: .none) {
+                    activeWorkoutManager.finishWorkout()
+                }
+                Button("Weiter trainieren", role: .cancel) {}
+            } message: {
+                if let detail = activeWorkoutManager.activeWorkout {
+                    if detail.completedSetCount == 0 {
+                        Text("Du hast noch keinen Satz abgehakt. Möchtest du das Workout trotzdem abschließen?")
+                    } else if detail.completedSetCount < detail.totalSetCount {
+                        Text("\(detail.completedSetCount) von \(detail.totalSetCount) Sätzen abgehakt. Nicht abgehakte Sätze werden beim Abschließen entfernt.")
+                    } else {
+                        Text("Alle \(detail.completedSetCount) Sätze sind abgehakt. Training jetzt speichern?")
+                    }
+                }
+            }
+            .alert("Workout verwerfen?", isPresented: $isShowingDiscardAlert) {
+                Button("Verwerfen", role: .destructive) {
+                    activeWorkoutManager.discardWorkout()
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Alle bisher eingetragenen Sätze dieses laufenden Trainings gehen verloren.")
+            }
+        }
+    }
+
+    private func headerCard(detail: WorkoutDetail) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Workout-Name", text: $workoutName)
+                .font(.title3)
+                .fontWeight(.bold)
+                .onChange(of: workoutName) { newValue in
+                    activeWorkoutManager.updateHeader(name: newValue, notes: workoutNotes)
+                }
+
+            TextField("Notizen zum Training (optional)", text: $workoutNotes, axis: .vertical)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineLimit(1...3)
+                .onChange(of: workoutNotes) { newValue in
+                    activeWorkoutManager.updateHeader(name: workoutName, notes: newValue)
+                }
+
+            HStack(spacing: 16) {
+                Label("\(detail.completedSetCount)/\(detail.totalSetCount) Sätze", systemImage: "checkmark.circle")
+                Label("\(Formatters.weight(detail.totalVolumeKg)) kg Volumen", systemImage: "scalemass")
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.top, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func exerciseCard(_ exerciseDetail: WorkoutExerciseDetail) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(exerciseDetail.exercise.name)
+                        .font(.headline)
+                        .foregroundColor(.accentColor)
+                    Text("\(exerciseDetail.exercise.muscleGroup.displayName) · Pause \(Formatters.restDuration(exerciseDetail.workoutExercise.restSeconds))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Menu {
+                    Button(role: .destructive) {
+                        activeWorkoutManager.removeExercise(workoutExerciseId: exerciseDetail.id)
+                    } label: {
+                        Label("Übung entfernen", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+
+            // Column headers
+            HStack(spacing: 8) {
+                Text("Satz")
+                    .frame(width: 32, alignment: .center)
+                Text("Vorher")
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Text("kg")
+                    .frame(width: 72, alignment: .center)
+                Text("Wdh.")
+                    .frame(width: 58, alignment: .center)
+                Image(systemName: "checkmark")
+                    .frame(width: 36, alignment: .center)
+            }
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 14)
+
+            VStack(spacing: 4) {
+                ForEach(exerciseDetail.sets) { set in
+                    WorkoutSetRowView(
+                        set: set,
+                        previous: exerciseDetail.previousSets[set.setOrder],
+                        onUpdate: { updated in
+                            activeWorkoutManager.updateSet(updated)
+                        },
+                        onToggleComplete: {
+                            activeWorkoutManager.toggleSetCompleted(
+                                set,
+                                restSeconds: exerciseDetail.workoutExercise.restSeconds,
+                                previous: exerciseDetail.previousSets[set.setOrder]
+                            )
+                        },
+                        onDelete: {
+                            activeWorkoutManager.deleteSet(
+                                id: set.id,
+                                workoutExerciseId: exerciseDetail.id
+                            )
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 4)
+
+            Button {
+                activeWorkoutManager.addSet(to: exerciseDetail.id)
+            } label: {
+                Label("Satz hinzufügen", systemImage: "plus")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.bordered)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+}
+
+struct ActiveWorkoutView_Previews: PreviewProvider {
+    static var previews: some View {
+        let db = AppDatabase.makeInMemory()
+        ActiveWorkoutView()
+            .environmentObject(ActiveWorkoutManager(database: db))
+            .environmentObject(ExerciseStore(database: db))
+    }
+}

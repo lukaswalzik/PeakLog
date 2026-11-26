@@ -152,3 +152,299 @@ extension AppDatabase {
         }
     }
 }
+
+// MARK: - Workout Operations
+
+extension AppDatabase {
+    static func fetchActiveWorkoutDetail(in db: Database) throws -> WorkoutDetail? {
+        guard let activeWorkout = try Workout
+            .filter(Workout.Columns.finishedAt == nil)
+            .order(Workout.Columns.startedAt.desc)
+            .fetchOne(db) else {
+            return nil
+        }
+
+        return try fetchWorkoutDetail(for: activeWorkout, includePreviousSets: true, in: db)
+    }
+
+    static func fetchWorkoutDetail(
+        for workout: Workout,
+        includePreviousSets: Bool,
+        in db: Database
+    ) throws -> WorkoutDetail {
+        let workoutExercises = try WorkoutExercise
+            .filter(WorkoutExercise.Columns.workoutId == workout.id)
+            .order(WorkoutExercise.Columns.sortOrder.asc)
+            .fetchAll(db)
+
+        guard !workoutExercises.isEmpty else {
+            return WorkoutDetail(workout: workout, exercises: [])
+        }
+
+        let exerciseIds = Set(workoutExercises.map { $0.exerciseId })
+        let exercises = try Exercise
+            .filter(exerciseIds.contains(Exercise.Columns.id))
+            .fetchAll(db)
+        let exercisesById = Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+
+        let weIds = workoutExercises.map { $0.id }
+        let allSets = try WorkoutSet
+            .filter(weIds.contains(WorkoutSet.Columns.workoutExerciseId))
+            .order(WorkoutSet.Columns.setOrder.asc)
+            .fetchAll(db)
+        let setsByWorkoutExercise = Dictionary(grouping: allSets, by: { $0.workoutExerciseId })
+
+        let details: [WorkoutExerciseDetail] = try workoutExercises.compactMap { we in
+            guard let exercise = exercisesById[we.exerciseId] else { return nil }
+            let sets = setsByWorkoutExercise[we.id] ?? []
+            let previousSets: [Int: PreviousSetReference]
+            if includePreviousSets {
+                previousSets = try fetchPreviousSets(forExerciseId: we.exerciseId, excludingWorkoutId: workout.id, in: db)
+            } else {
+                previousSets = [:]
+            }
+            return WorkoutExerciseDetail(
+                workoutExercise: we,
+                exercise: exercise,
+                sets: sets,
+                previousSets: previousSets
+            )
+        }
+
+        return WorkoutDetail(workout: workout, exercises: details)
+    }
+
+    private static func fetchPreviousSets(
+        forExerciseId exerciseId: String,
+        excludingWorkoutId: String,
+        in db: Database
+    ) throws -> [Int: PreviousSetReference] {
+        let previousWorkoutExerciseId = try String.fetchOne(
+            db,
+            sql: """
+                SELECT we.id
+                FROM workout_exercises we
+                JOIN workouts w ON w.id = we.workoutId
+                WHERE we.exerciseId = ?
+                  AND w.id != ?
+                  AND w.finishedAt IS NOT NULL
+                ORDER BY w.startedAt DESC
+                LIMIT 1
+                """,
+            arguments: [exerciseId, excludingWorkoutId]
+        )
+
+        guard let prevWeId = previousWorkoutExerciseId else {
+            return [:]
+        }
+
+        let prevSets = try WorkoutSet
+            .filter(WorkoutSet.Columns.workoutExerciseId == prevWeId && WorkoutSet.Columns.isCompleted == true)
+            .order(WorkoutSet.Columns.setOrder.asc)
+            .fetchAll(db)
+
+        var result: [Int: PreviousSetReference] = [:]
+        for (index, set) in prevSets.enumerated() {
+            result[index + 1] = PreviousSetReference(weightKg: set.weightKg, reps: set.reps)
+        }
+        return result
+    }
+
+    func startEmptyWorkout(name: String = "Freies Training") throws -> String {
+        let workout = Workout(name: name, startedAt: Date(), finishedAt: nil)
+        try dbWriter.write { db in
+            try workout.insert(db)
+        }
+        return workout.id
+    }
+
+    func startWorkout(from routineDetail: RoutineWithExercises) throws -> String {
+        let workout = Workout(
+            routineId: routineDetail.routine.id,
+            name: routineDetail.routine.name,
+            startedAt: Date(),
+            finishedAt: nil,
+            notes: routineDetail.routine.notes
+        )
+
+        try dbWriter.write { db in
+            try workout.insert(db)
+
+            for (index, item) in routineDetail.exercises.enumerated() {
+                let we = WorkoutExercise(
+                    workoutId: workout.id,
+                    exerciseId: item.exercise.id,
+                    sortOrder: index,
+                    restSeconds: item.effectiveRestSeconds,
+                    notes: item.routineExercise.notes
+                )
+                try we.insert(db)
+
+                let setCount = max(1, item.routineExercise.targetSets)
+                for setIndex in 1...setCount {
+                    let set = WorkoutSet(
+                        workoutExerciseId: we.id,
+                        setOrder: setIndex,
+                        setType: .normal,
+                        weightKg: nil,
+                        reps: nil,
+                        isCompleted: false,
+                        completedAt: nil
+                    )
+                    try set.insert(db)
+                }
+            }
+        }
+        return workout.id
+    }
+
+    func addExercisesToWorkout(workoutId: String, exercises: [Exercise]) throws {
+        try dbWriter.write { db in
+            let currentMaxOrder = try Int.fetchOne(
+                db,
+                sql: "SELECT COALESCE(MAX(sortOrder), -1) FROM workout_exercises WHERE workoutId = ?",
+                arguments: [workoutId]
+            ) ?? -1
+
+            for (offset, exercise) in exercises.enumerated() {
+                let we = WorkoutExercise(
+                    workoutId: workoutId,
+                    exerciseId: exercise.id,
+                    sortOrder: currentMaxOrder + 1 + offset,
+                    restSeconds: exercise.defaultRestSeconds,
+                    notes: nil
+                )
+                try we.insert(db)
+
+                let initialSet = WorkoutSet(
+                    workoutExerciseId: we.id,
+                    setOrder: 1,
+                    setType: .normal
+                )
+                try initialSet.insert(db)
+            }
+        }
+    }
+
+    func removeWorkoutExercise(id: String) throws {
+        try dbWriter.write { db in
+            _ = try WorkoutExercise.deleteOne(db, key: id)
+        }
+    }
+
+    func addSet(to workoutExerciseId: String) throws {
+        try dbWriter.write { db in
+            let existingSets = try WorkoutSet
+                .filter(WorkoutSet.Columns.workoutExerciseId == workoutExerciseId)
+                .order(WorkoutSet.Columns.setOrder.asc)
+                .fetchAll(db)
+
+            let nextOrder = (existingSets.last?.setOrder ?? 0) + 1
+            let lastSet = existingSets.last
+            let newSet = WorkoutSet(
+                workoutExerciseId: workoutExerciseId,
+                setOrder: nextOrder,
+                setType: .normal,
+                weightKg: lastSet?.weightKg,
+                reps: lastSet?.reps,
+                isCompleted: false,
+                completedAt: nil
+            )
+            try newSet.insert(db)
+        }
+    }
+
+    func updateSet(_ set: WorkoutSet) throws {
+        try dbWriter.write { db in
+            try set.update(db)
+        }
+    }
+
+    func deleteSet(id: String, workoutExerciseId: String) throws {
+        try dbWriter.write { db in
+            _ = try WorkoutSet.deleteOne(db, key: id)
+
+            let remaining = try WorkoutSet
+                .filter(WorkoutSet.Columns.workoutExerciseId == workoutExerciseId)
+                .order(WorkoutSet.Columns.setOrder.asc)
+                .fetchAll(db)
+
+            for (index, var item) in remaining.enumerated() {
+                let desiredOrder = index + 1
+                if item.setOrder != desiredOrder {
+                    item.setOrder = desiredOrder
+                    try item.update(db)
+                }
+            }
+        }
+    }
+
+    func updateWorkoutHeader(id: String, name: String, notes: String?) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE workouts SET name = ?, notes = ? WHERE id = ?",
+                arguments: [name, notes, id]
+            )
+        }
+    }
+
+    func finishWorkout(id: String) throws {
+        try dbWriter.write { db in
+            // Remove uncompleted sets so history & stats only contain completed work
+            try db.execute(
+                sql: """
+                    DELETE FROM workout_sets
+                    WHERE isCompleted = 0
+                      AND workoutExerciseId IN (
+                          SELECT id FROM workout_exercises WHERE workoutId = ?
+                      )
+                    """,
+                arguments: [id]
+            )
+
+            // Remove exercises that have no completed sets left
+            try db.execute(
+                sql: """
+                    DELETE FROM workout_exercises
+                    WHERE workoutId = ?
+                      AND id NOT IN (SELECT DISTINCT workoutExerciseId FROM workout_sets)
+                    """,
+                arguments: [id]
+            )
+
+            // Re-number remaining sets cleanly per exercise
+            let remainingExercises = try WorkoutExercise
+                .filter(WorkoutExercise.Columns.workoutId == id)
+                .order(WorkoutExercise.Columns.sortOrder.asc)
+                .fetchAll(db)
+
+            for (exIndex, var we) in remainingExercises.enumerated() {
+                if we.sortOrder != exIndex {
+                    we.sortOrder = exIndex
+                    try we.update(db)
+                }
+                let sets = try WorkoutSet
+                    .filter(WorkoutSet.Columns.workoutExerciseId == we.id)
+                    .order(WorkoutSet.Columns.setOrder.asc)
+                    .fetchAll(db)
+                for (setIndex, var set) in sets.enumerated() {
+                    if set.setOrder != setIndex + 1 {
+                        set.setOrder = setIndex + 1
+                        try set.update(db)
+                    }
+                }
+            }
+
+            try db.execute(
+                sql: "UPDATE workouts SET finishedAt = ? WHERE id = ?",
+                arguments: [Date(), id]
+            )
+        }
+    }
+
+    func discardWorkout(id: String) throws {
+        try dbWriter.write { db in
+            _ = try Workout.deleteOne(db, key: id)
+        }
+    }
+}

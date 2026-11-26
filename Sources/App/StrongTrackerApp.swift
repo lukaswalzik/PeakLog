@@ -5,6 +5,7 @@ import UIKit
 struct StrongTrackerApp: App {
     @StateObject private var exerciseStore = ExerciseStore(database: AppDatabase.shared)
     @StateObject private var routineStore = RoutineStore(database: AppDatabase.shared)
+    @StateObject private var activeWorkoutManager = ActiveWorkoutManager(database: AppDatabase.shared)
 
     init() {
         let tabBarAppearance = UITabBarAppearance()
@@ -18,6 +19,7 @@ struct StrongTrackerApp: App {
             RootTabView()
                 .environmentObject(exerciseStore)
                 .environmentObject(routineStore)
+                .environmentObject(activeWorkoutManager)
         }
     }
 }

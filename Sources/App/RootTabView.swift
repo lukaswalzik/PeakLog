@@ -8,52 +8,110 @@ struct RootTabView: View {
         case profile
     }
 
+    @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
     @State private var selectedTab: Tab = .start
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            StartView()
+        ZStack(alignment: .bottom) {
+            TabView(selection: $selectedTab) {
+                StartView()
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .tabItem {
+                        Label("Start", systemImage: "figure.strengthtraining.traditional")
+                    }
+                    .tag(Tab.start)
+
+                NavigationStack {
+                    EmptyStateView(
+                        systemImage: "clock.arrow.circlepath",
+                        title: "Trainingsverlauf",
+                        message: "Abgeschlossene Workouts erscheinen hier ab Phase 5."
+                    )
+                    .navigationTitle("Verlauf")
+                }
                 .toolbarBackground(.visible, for: .tabBar)
                 .tabItem {
-                    Label("Start", systemImage: "figure.strengthtraining.traditional")
+                    Label("Verlauf", systemImage: "clock.arrow.circlepath")
                 }
-                .tag(Tab.start)
+                .tag(Tab.history)
 
-            NavigationStack {
-                EmptyStateView(
-                    systemImage: "clock.arrow.circlepath",
-                    title: "Trainingsverlauf",
-                    message: "Abgeschlossene Workouts erscheinen hier ab Phase 5."
-                )
-                .navigationTitle("Verlauf")
-            }
-            .toolbarBackground(.visible, for: .tabBar)
-            .tabItem {
-                Label("Verlauf", systemImage: "clock.arrow.circlepath")
-            }
-            .tag(Tab.history)
+                ExerciseListView()
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .tabItem {
+                        Label("Übungen", systemImage: "dumbbell")
+                    }
+                    .tag(Tab.exercises)
 
-            ExerciseListView()
+                NavigationStack {
+                    EmptyStateView(
+                        systemImage: "person.crop.circle",
+                        title: "Profil & Backup",
+                        message: "PR-Übersicht und lokaler JSON-Export/Import folgen in Phase 5."
+                    )
+                    .navigationTitle("Profil")
+                }
                 .toolbarBackground(.visible, for: .tabBar)
                 .tabItem {
-                    Label("Übungen", systemImage: "dumbbell")
+                    Label("Profil", systemImage: "person.crop.circle")
                 }
-                .tag(Tab.exercises)
+                .tag(Tab.profile)
+            }
 
-            NavigationStack {
-                EmptyStateView(
-                    systemImage: "person.crop.circle",
-                    title: "Profil & Backup",
-                    message: "PR-Übersicht und lokaler JSON-Export/Import folgen in Phase 5."
-                )
-                .navigationTitle("Profil")
+            if let detail = activeWorkoutManager.activeWorkout, !activeWorkoutManager.isPresentingSheet {
+                ActiveWorkoutBanner(detail: detail) {
+                    activeWorkoutManager.isPresentingSheet = true
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 58)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .toolbarBackground(.visible, for: .tabBar)
-            .tabItem {
-                Label("Profil", systemImage: "person.crop.circle")
-            }
-            .tag(Tab.profile)
         }
+        .sheet(isPresented: $activeWorkoutManager.isPresentingSheet) {
+            ActiveWorkoutView()
+        }
+    }
+}
+
+private struct ActiveWorkoutBanner: View {
+    let detail: WorkoutDetail
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 10, height: 10)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(detail.workout.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    TimelineView(.periodic(from: .now, by: 1.0)) { context in
+                        Text("\(Formatters.elapsedDuration(from: detail.workout.startedAt, to: context.date)) · \(detail.completedSetCount)/\(detail.totalSetCount) Sätze")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.up")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.accentColor)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -63,5 +121,6 @@ struct RootTabView_Previews: PreviewProvider {
         RootTabView()
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(RoutineStore(database: db))
+            .environmentObject(ActiveWorkoutManager(database: db))
     }
 }
