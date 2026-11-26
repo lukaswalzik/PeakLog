@@ -210,13 +210,27 @@ struct AICoachView: View {
         let avgKcal = nutritionStore.averageWeeklyCalories
         let avgProt = nutritionStore.averageWeeklyProtein
 
+        var ouraLine = ""
+        if let latestOura = OuraService.shared.snapshot?.latestDay {
+            let parts = [
+                latestOura.readinessScore.map { "Readiness \($0)/100" },
+                latestOura.sleepHours.map { String(format: "Schlaf %.1fh", $0) },
+                latestOura.averageHRV.map { "HRV \($0)ms" },
+                latestOura.lowestHeartRate.map { "Ruhepuls \($0)bpm" },
+                latestOura.steps.map { "\($0) Schritte" }
+            ].compactMap { $0 }
+            if !parts.isEmpty {
+                ouraLine = "\n- Oura Ring (\(latestOura.day)): " + parts.joined(separator: ", ")
+            }
+        }
+
         return """
         - Profil: \(goals.sex.displayName), \(goals.ageYears) J., \(goals.heightCm) cm, Ziel: \(goals.goalType.displayName)
         - Kraft-Workouts: \(workouts28.count) in 28 Tagen (\(workouts7.count) in den letzten 7 Tagen)
         - Cardio-Sessions (28T): \(cardio28.count)
         - Wochen-Volumen (7T Arbeitssätze): \(muscleVolumeStr)
         - Körpergewicht: \(weightInfo)
-        - Ernährung (7T Ø): \(avgKcal) kcal (Ziel: \(goals.targetCalories) kcal), \(avgProt) g Protein (Ziel: \(goals.targetProteinGrams) g)
+        - Ernährung (7T Ø): \(avgKcal) kcal (Ziel: \(goals.targetCalories) kcal), \(avgProt) g Protein (Ziel: \(goals.targetProteinGrams) g)\(ouraLine)
         """
     }
 }

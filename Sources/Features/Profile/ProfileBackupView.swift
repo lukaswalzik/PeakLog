@@ -160,6 +160,35 @@ struct ProfileBackupView: View {
                     }
 
                     NavigationLink {
+                        OuraIntegrationView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "circle.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(.cyan)
+                                .frame(width: 40, height: 40)
+                                .background(Color.cyan.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Oura Ring (API v2)")
+                                    .font(.headline)
+                                if let latest = OuraService.shared.snapshot?.latestDay,
+                                   let r = latest.readinessScore {
+                                    Text("Verbunden · Readiness \(r)/100\(latest.averageHRV.map { " · HRV \($0) ms" } ?? "")")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                } else {
+                                    Text("OAuth2 Sync für Readiness, Schlaf, HRV & Workouts")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
                         RemindersSettingsView()
                     } label: {
                         HStack(spacing: 12) {
