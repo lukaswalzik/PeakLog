@@ -41,9 +41,12 @@ struct ExercisePickerView: View {
                                 toggleSelection(exercise.id)
                             } label: {
                                 HStack(spacing: 12) {
+                                    ExerciseThumbnailView(exercise: exercise, size: 42)
+
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(exercise.name)
                                             .font(.body)
+                                            .fontWeight(.medium)
                                             .foregroundColor(.primary)
                                         Text("\(exercise.muscleGroup.displayName) · \(exercise.equipment.displayName)")
                                             .font(.caption)

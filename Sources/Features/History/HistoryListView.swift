@@ -62,6 +62,20 @@ struct HistoryListView: View {
 private struct HistoryRowView: View {
     let detail: WorkoutDetail
 
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "dd"
+        return f
+    }()
+
+    private static let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "MMM"
+        return f
+    }()
+
     private var durationText: String {
         let end = detail.workout.finishedAt ?? detail.workout.startedAt
         return Formatters.elapsedDuration(from: detail.workout.startedAt, to: end)
@@ -74,33 +88,43 @@ private struct HistoryRowView: View {
         return detail.exercises
             .prefix(3)
             .map { "\($0.sets.count)× \($0.exercise.name)" }
-            .joined(separator: "\n")
+            .joined(separator: " · ")
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(detail.workout.name)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 1) {
+                Text(Self.dayFormatter.string(from: detail.workout.startedAt))
                     .font(.headline)
-                Spacer()
-                Text(Formatters.shortDate(detail.workout.startedAt))
-                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.accentColor)
+                Text(Self.monthFormatter.string(from: detail.workout.startedAt).uppercased())
+                    .font(.caption2)
+                    .fontWeight(.semibold)
                     .foregroundColor(.secondary)
             }
+            .frame(width: 44, height: 48)
+            .background(Color.accentColor.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            HStack(spacing: 12) {
-                Label(durationText, systemImage: "clock")
-                Label("\(Formatters.weight(detail.totalVolumeKg)) kg", systemImage: "scalemass")
-                Label("\(detail.completedSetCount) Sätze", systemImage: "checkmark.circle")
-            }
-            .font(.caption)
-            .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(detail.workout.name)
+                    .font(.headline)
+                    .lineLimit(1)
 
-            Text(exercisePreview)
+                HStack(spacing: 10) {
+                    Label(durationText, systemImage: "clock")
+                    Label("\(Formatters.weight(detail.totalVolumeKg)) kg", systemImage: "scalemass")
+                    Label("\(detail.completedSetCount)", systemImage: "checkmark.circle")
+                }
                 .font(.caption)
                 .foregroundColor(.secondary)
-                .lineLimit(3)
-                .padding(.top, 2)
+
+                Text(exercisePreview)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
         }
         .padding(.vertical, 4)
     }

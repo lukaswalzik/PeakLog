@@ -98,6 +98,12 @@ enum Migrations {
             try SeedData.insertDefaultExercises(in: db)
         }
 
+        migrator.registerMigration("v2_exercise_images") { db in
+            try db.alter(table: "exercises") { t in
+                t.add(column: "imageFilename", .text)
+            }
+        }
+
         return migrator
     }
 }

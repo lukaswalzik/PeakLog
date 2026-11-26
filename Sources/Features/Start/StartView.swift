@@ -3,6 +3,7 @@ import SwiftUI
 struct StartView: View {
     @EnvironmentObject private var routineStore: RoutineStore
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+    @EnvironmentObject private var historyStore: HistoryStore
 
     @State private var isShowingCreateRoutine: Bool = false
     @State private var editingRoutine: RoutineWithExercises? = nil
@@ -12,35 +13,24 @@ struct StartView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section(header: Text("Schnellstart")) {
-                    Button {
-                        if activeWorkoutManager.hasActiveWorkout {
-                            isShowingAlreadyActiveAlert = true
-                        } else {
-                            activeWorkoutManager.startEmptyWorkout()
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "play.fill")
-                                .font(.headline)
-                            Text("Leeres Workout starten")
-                                .font(.headline)
-                            Spacer()
-                        }
-                        .padding(.vertical, 6)
-                        .foregroundColor(.accentColor)
-                    }
+                Section {
+                    heroQuickStartCard
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowBackground(Color.clear)
                 }
 
                 Section(
                     header: HStack {
                         Text("Meine Routinen")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                         Spacer()
                         Button {
                             isShowingCreateRoutine = true
                         } label: {
-                            Label("Neu", systemImage: "plus")
+                            Label("Neue Routine", systemImage: "plus")
                                 .font(.caption)
+                                .fontWeight(.semibold)
                                 .textCase(nil)
                         }
                     }
@@ -49,7 +39,7 @@ struct StartView: View {
                         VStack(spacing: 10) {
                             Image(systemName: "list.bullet.rectangle.portrait")
                                 .font(.system(size: 32))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.accentColor)
                             Text("Noch keine Routinen")
                                 .font(.headline)
                             Text("Erstelle deine erste Trainingsvorlage (z. B. Push A oder Ganzkörper).")
@@ -90,7 +80,7 @@ struct StartView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Start")
+            .navigationTitle("StrongTracker")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if routineStore.routines.count > 1 {
@@ -101,7 +91,8 @@ struct StartView: View {
                     Button {
                         isShowingCreateRoutine = true
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
                     }
                     .accessibilityLabel("Neue Routine")
                 }
@@ -165,6 +156,56 @@ struct StartView: View {
             }
         }
     }
+
+    private var heroQuickStartCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bereit fürs Training?")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Text("\(historyStore.totalCompletedWorkouts) Workouts absolviert · \(routineStore.routines.count) Routinen")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.85))
+                }
+
+                Spacer()
+
+                Image(systemName: "flame.fill")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                    .padding(10)
+                    .background(Color.white.opacity(0.16))
+                    .clipShape(Circle())
+            }
+
+            Button {
+                if activeWorkoutManager.hasActiveWorkout {
+                    isShowingAlreadyActiveAlert = true
+                } else {
+                    activeWorkoutManager.startEmptyWorkout()
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "play.fill")
+                    Text("Leeres Workout starten")
+                        .fontWeight(.semibold)
+                }
+                .font(.subheadline)
+                .foregroundColor(Color(red: 0.11, green: 0.36, blue: 0.92))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(AppTheme.heroGradient)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.blue.opacity(0.22), radius: 8, x: 0, y: 4)
+    }
 }
 
 private struct RoutineCardRow: View {
@@ -184,7 +225,7 @@ private struct RoutineCardRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.routine.name)
@@ -217,20 +258,32 @@ private struct RoutineCardRow: View {
                 }
             }
 
+            if !item.exercises.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(item.exercises.prefix(5)) { ex in
+                        ExerciseThumbnailView(exercise: ex.exercise, size: 30)
+                    }
+                    if item.exercises.count > 5 {
+                        Text("+\(item.exercises.count - 5)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                            .frame(width: 30, height: 30)
+                            .background(Color(uiColor: .tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                }
+            }
+
             Text(exerciseSummary)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .lineLimit(4)
 
-            if item.exercises.count > 4 {
-                Text("+\(item.exercises.count - 4) weitere Übungen")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
             HStack {
                 Text("\(item.exercises.count) Übungen · \(item.totalSets) Sätze")
                     .font(.caption2)
+                    .fontWeight(.medium)
                     .foregroundColor(.secondary)
 
                 Spacer()
@@ -262,5 +315,6 @@ struct StartView_Previews: PreviewProvider {
             .environmentObject(RoutineStore(database: db))
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(ActiveWorkoutManager(database: db))
+            .environmentObject(HistoryStore(database: db))
     }
 }

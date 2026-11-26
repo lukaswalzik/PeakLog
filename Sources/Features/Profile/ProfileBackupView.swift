@@ -30,28 +30,29 @@ struct ProfileBackupView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section(header: Text("Gesamt-Übersicht")) {
-                    HStack {
-                        Label("Abgeschlossene Workouts", systemImage: "figure.strengthtraining.traditional")
-                        Spacer()
-                        Text("\(historyStore.totalCompletedWorkouts)")
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
+                Section {
+                    HStack(spacing: 10) {
+                        ProfileStatTile(
+                            title: "Workouts",
+                            value: "\(historyStore.totalCompletedWorkouts)",
+                            icon: "figure.strengthtraining.traditional",
+                            color: .blue
+                        )
+                        ProfileStatTile(
+                            title: "Sätze",
+                            value: "\(historyStore.totalCompletedSets)",
+                            icon: "checkmark.circle.fill",
+                            color: .green
+                        )
+                        ProfileStatTile(
+                            title: "Volumen",
+                            value: formattedTotalVolume,
+                            icon: "scalemass.fill",
+                            color: .orange
+                        )
                     }
-                    HStack {
-                        Label("Abgeschlossene Sätze", systemImage: "checkmark.circle")
-                        Spacer()
-                        Text("\(historyStore.totalCompletedSets)")
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack {
-                        Label("Gesamtvolumen", systemImage: "scalemass")
-                        Spacer()
-                        Text("\(Formatters.weight(historyStore.totalVolumeKg)) kg")
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                    }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowBackground(Color.clear)
                 }
 
                 Section(header: Text("Top PRs (geschätztes 1RM)")) {
@@ -64,11 +65,14 @@ struct ProfileBackupView: View {
                             NavigationLink {
                                 ExerciseDetailView(exercise: pr.exercise)
                             } label: {
-                                HStack {
+                                HStack(spacing: 12) {
+                                    ExerciseThumbnailView(exercise: pr.exercise, size: 40)
+
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(pr.exercise.name)
                                             .font(.subheadline)
-                                            .fontWeight(.medium)
+                                            .fontWeight(.semibold)
+                                            .lineLimit(1)
                                         Text("Max. \(Formatters.weight(pr.bestWeightKg)) kg · \(Formatters.shortDate(pr.achievedAt))")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -77,7 +81,7 @@ struct ProfileBackupView: View {
                                     Text("\(Formatters.weight(pr.bestEstimated1RM)) kg")
                                         .font(.subheadline)
                                         .fontWeight(.bold)
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(pr.exercise.muscleGroup.accentColor)
                                 }
                                 .padding(.vertical, 2)
                             }
@@ -225,10 +229,48 @@ struct ProfileBackupView: View {
         }
     }
 
+    private var formattedTotalVolume: String {
+        let vol = historyStore.totalVolumeKg
+        if vol >= 1000 {
+            return "\(Formatters.weight(vol / 1000.0)) t"
+        }
+        return "\(Formatters.weight(vol)) kg"
+    }
+
     private func showStatus(title: String, message: String) {
         statusAlertTitle = title
         statusAlertMessage = message
         isShowingStatusAlert = true
+    }
+}
+
+private struct ProfileStatTile: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundColor(color)
+                .padding(7)
+                .background(color.opacity(0.14))
+                .clipShape(Circle())
+
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard(padding: 12)
     }
 }
 

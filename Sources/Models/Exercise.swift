@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import SwiftUI
 
 enum MuscleGroup: String, CaseIterable, Codable, Identifiable, Hashable, DatabaseValueConvertible {
     case chest
@@ -23,6 +24,32 @@ enum MuscleGroup: String, CaseIterable, Codable, Identifiable, Hashable, Databas
         case .triceps: return "Trizeps"
         case .core: return "Core"
         case .other: return "Sonstiges"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .chest: return .blue
+        case .back: return .indigo
+        case .shoulders: return .orange
+        case .legs: return .green
+        case .biceps: return .purple
+        case .triceps: return .pink
+        case .core: return .teal
+        case .other: return .gray
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .chest: return "figure.strengthtraining.traditional"
+        case .back: return "figure.strengthtraining.functional"
+        case .shoulders: return "dumbbell.fill"
+        case .legs: return "figure.run"
+        case .biceps: return "bolt.fill"
+        case .triceps: return "flame.fill"
+        case .core: return "figure.core.training"
+        case .other: return "figure.flexibility"
         }
     }
 }
@@ -62,6 +89,7 @@ struct Exercise: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
     var isCustom: Bool
     var isArchived: Bool
     var notes: String?
+    var imageFilename: String?
     var createdAt: Date
 
     enum Columns {
@@ -73,6 +101,7 @@ struct Exercise: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
         static let isCustom = Column(CodingKeys.isCustom)
         static let isArchived = Column(CodingKeys.isArchived)
         static let notes = Column(CodingKeys.notes)
+        static let imageFilename = Column(CodingKeys.imageFilename)
         static let createdAt = Column(CodingKeys.createdAt)
     }
 
@@ -85,6 +114,7 @@ struct Exercise: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
         isCustom: Bool = true,
         isArchived: Bool = false,
         notes: String? = nil,
+        imageFilename: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -95,6 +125,7 @@ struct Exercise: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
         self.isCustom = isCustom
         self.isArchived = isArchived
         self.notes = notes
+        self.imageFilename = imageFilename
         self.createdAt = createdAt
     }
 }

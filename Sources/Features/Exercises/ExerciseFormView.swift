@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct ExerciseFormView: View {
     @Environment(\.dismiss) private var dismiss
@@ -12,6 +14,11 @@ struct ExerciseFormView: View {
     @State private var defaultRestSeconds: Int
     @State private var notes: String
 
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var previewImage: UIImage?
+    @State private var imageChanged: Bool = false
+    @State private var isShowingCamera: Bool = false
+
     init(existingExercise: Exercise? = nil, onSave: @escaping (Exercise) -> Void) {
         self.existingExercise = existingExercise
         self.onSave = onSave
@@ -20,6 +27,12 @@ struct ExerciseFormView: View {
         _equipment = State(initialValue: existingExercise?.equipment ?? .barbell)
         _defaultRestSeconds = State(initialValue: existingExercise?.defaultRestSeconds ?? 90)
         _notes = State(initialValue: existingExercise?.notes ?? "")
+        _previewImage = State(
+            initialValue: MediaStorage.shared.loadImage(
+                filename: existingExercise?.imageFilename,
+                in: .exercises
+            )
+        )
     }
 
     private var isValid: Bool {
@@ -29,6 +42,74 @@ struct ExerciseFormView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section(header: Text("Übungsbild")) {
+                    VStack(spacing: 12) {
+                        if let image = previewImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 190)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        } else {
+                            ZStack {
+                                LinearGradient(
+                                    colors: [
+                                        muscleGroup.accentColor.opacity(0.22),
+                                        muscleGroup.accentColor.opacity(0.08)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                                VStack(spacing: 8) {
+                                    Image(systemName: muscleGroup.systemImage)
+                                        .font(.system(size: 36, weight: .semibold))
+                                        .foregroundColor(muscleGroup.accentColor)
+                                    Text("Kein eigenes Foto")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 130)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+
+                        HStack(spacing: 12) {
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                Label("Mediathek", systemImage: "photo.on.rectangle.angled")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+
+                            if CameraPickerView.isAvailable {
+                                Button {
+                                    isShowingCamera = true
+                                } label: {
+                                    Label("Kamera", systemImage: "camera.fill")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+
+                        if previewImage != nil {
+                            Button(role: .destructive) {
+                                previewImage = nil
+                                imageChanged = true
+                            } label: {
+                                Label("Bild entfernen", systemImage: "trash")
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
                 Section(header: Text("Allgemein")) {
                     TextField("Übungsname (z. B. Schrägbankdrücken)", text: $name)
 
@@ -81,6 +162,25 @@ struct ExerciseFormView: View {
                     .fontWeight(.semibold)
                 }
             }
+            .onChange(of: selectedPhotoItem) { newItem in
+                guard let newItem = newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            previewImage = uiImage
+                            imageChanged = true
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $isShowingCamera) {
+                CameraPickerView { captured in
+                    previewImage = captured
+                    imageChanged = true
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 
@@ -88,6 +188,18 @@ struct ExerciseFormView: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedNotes = trimmedNotes.isEmpty ? nil : trimmedNotes
+
+        var finalImageFilename = existingExercise?.imageFilename
+        if imageChanged {
+            if let oldFilename = existingExercise?.imageFilename {
+                MediaStorage.shared.deleteImage(filename: oldFilename, in: .exercises)
+            }
+            if let newImage = previewImage {
+                finalImageFilename = try? MediaStorage.shared.saveImage(newImage, in: .exercises)
+            } else {
+                finalImageFilename = nil
+            }
+        }
 
         let exercise = Exercise(
             id: existingExercise?.id ?? UUID().uuidString,
@@ -98,6 +210,7 @@ struct ExerciseFormView: View {
             isCustom: existingExercise?.isCustom ?? true,
             isArchived: existingExercise?.isArchived ?? false,
             notes: normalizedNotes,
+            imageFilename: finalImageFilename,
             createdAt: existingExercise?.createdAt ?? Date()
         )
         onSave(exercise)

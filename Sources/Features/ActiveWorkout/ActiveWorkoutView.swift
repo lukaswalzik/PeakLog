@@ -11,6 +11,7 @@ struct ActiveWorkoutView: View {
     @State private var isShowingFinishAlert: Bool = false
     @State private var isShowingDiscardAlert: Bool = false
     @State private var hasLoadedHeader: Bool = false
+    @State private var fullscreenPhoto: (image: UIImage, title: String)? = nil
 
     var body: some View {
         NavigationStack {
@@ -169,6 +170,16 @@ struct ActiveWorkoutView: View {
                     activeWorkoutManager.addExercises(pickedExercises)
                 }
             }
+            .sheet(
+                isPresented: Binding(
+                    get: { fullscreenPhoto != nil },
+                    set: { if !$0 { fullscreenPhoto = nil } }
+                )
+            ) {
+                if let photo = fullscreenPhoto {
+                    FullscreenImageView(image: photo.image, caption: photo.title)
+                }
+            }
             .alert("Workout abschließen?", isPresented: $isShowingFinishAlert) {
                 Button("Abschließen", role: .none) {
                     activeWorkoutManager.finishWorkout()
@@ -221,15 +232,22 @@ struct ActiveWorkoutView: View {
             .foregroundColor(.secondary)
             .padding(.top, 2)
         }
-        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .strongCard()
     }
 
     private func exerciseCard(_ exerciseDetail: WorkoutExerciseDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
+            HStack(alignment: .center, spacing: 10) {
+                Button {
+                    if let img = MediaStorage.shared.loadImage(filename: exerciseDetail.exercise.imageFilename, in: .exercises) {
+                        fullscreenPhoto = (img, exerciseDetail.exercise.name)
+                    }
+                } label: {
+                    ExerciseThumbnailView(exercise: exerciseDetail.exercise, size: 42)
+                }
+                .buttonStyle(.plain)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exerciseDetail.exercise.name)
                         .font(.headline)

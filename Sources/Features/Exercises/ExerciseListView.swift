@@ -6,7 +6,6 @@ struct ExerciseListView: View {
     @State private var searchText: String = ""
     @State private var selectedMuscleGroup: MuscleGroup? = nil
     @State private var isShowingCreateSheet: Bool = false
-    @State private var editingExercise: Exercise? = nil
 
     private var filteredExercises: [Exercise] {
         exerciseStore.exercises.filter { exercise in
@@ -61,7 +60,8 @@ struct ExerciseListView: View {
                     Button {
                         isShowingCreateSheet = true
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
                     }
                     .accessibilityLabel("Neue Übung")
                 }
@@ -69,11 +69,6 @@ struct ExerciseListView: View {
             .sheet(isPresented: $isShowingCreateSheet) {
                 ExerciseFormView { newExercise in
                     exerciseStore.save(newExercise)
-                }
-            }
-            .sheet(item: $editingExercise) { exercise in
-                ExerciseFormView(existingExercise: exercise) { updatedExercise in
-                    exerciseStore.save(updatedExercise)
                 }
             }
             .alert(
@@ -97,6 +92,7 @@ struct ExerciseListView: View {
             HStack(spacing: 8) {
                 FilterChip(
                     title: "Alle (\(exerciseStore.exercises.count))",
+                    color: .accentColor,
                     isSelected: selectedMuscleGroup == nil
                 ) {
                     selectedMuscleGroup = nil
@@ -105,6 +101,7 @@ struct ExerciseListView: View {
                 ForEach(MuscleGroup.allCases) { group in
                     FilterChip(
                         title: group.displayName,
+                        color: group.accentColor,
                         isSelected: selectedMuscleGroup == group
                     ) {
                         selectedMuscleGroup = (selectedMuscleGroup == group) ? nil : group
@@ -120,6 +117,7 @@ struct ExerciseListView: View {
 
 private struct FilterChip: View {
     let title: String
+    let color: Color
     let isSelected: Bool
     let action: () -> Void
 
@@ -127,12 +125,16 @@ private struct FilterChip: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline)
-                .fontWeight(isSelected ? .semibold : .regular)
+                .fontWeight(isSelected ? .semibold : .medium)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
+                .background(isSelected ? color : Color(uiColor: .secondarySystemGroupedBackground))
                 .foregroundColor(isSelected ? .white : .primary)
                 .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.clear : Color.primary.opacity(0.08), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
     }
@@ -143,12 +145,15 @@ private struct ExerciseRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            ExerciseThumbnailView(exercise: exercise, size: 48)
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(exercise.name)
                         .font(.body)
-                        .fontWeight(.medium)
+                        .fontWeight(.semibold)
                         .foregroundColor(.primary)
+                        .lineLimit(1)
 
                     if exercise.isCustom {
                         Text("Eigene")
@@ -162,15 +167,27 @@ private struct ExerciseRowView: View {
                     }
                 }
 
-                Text("\(exercise.muscleGroup.displayName) · \(exercise.equipment.displayName)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Text(exercise.muscleGroup.displayName)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(exercise.muscleGroup.accentColor.opacity(0.14))
+                        .foregroundColor(exercise.muscleGroup.accentColor)
+                        .clipShape(Capsule())
+
+                    Text(exercise.equipment.displayName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Spacer()
 
             Text(Formatters.restDuration(exercise.defaultRestSeconds))
                 .font(.caption)
+                .fontWeight(.medium)
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
