@@ -132,6 +132,31 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v4_cardio") { db in
+            try db.create(table: "cardio_sessions") { t in
+                t.column("id", .text).primaryKey()
+                t.column("activityType", .text).notNull()
+                t.column("startedAt", .datetime).notNull()
+                t.column("durationSeconds", .integer).notNull()
+                t.column("distanceKm", .double)
+                t.column("avgHeartRate", .integer)
+                t.column("maxHeartRate", .integer)
+                t.column("calories", .integer)
+                t.column("zone1Seconds", .integer).notNull().defaults(to: 0)
+                t.column("zone2Seconds", .integer).notNull().defaults(to: 0)
+                t.column("zone3Seconds", .integer).notNull().defaults(to: 0)
+                t.column("zone4Seconds", .integer).notNull().defaults(to: 0)
+                t.column("zone5Seconds", .integer).notNull().defaults(to: 0)
+                t.column("notes", .text)
+            }
+
+            try db.create(
+                index: "idx_cardio_sessions_startedAt",
+                on: "cardio_sessions",
+                columns: ["startedAt"]
+            )
+        }
+
         return migrator
     }
 }

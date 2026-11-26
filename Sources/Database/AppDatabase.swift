@@ -626,7 +626,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 2,
+                schemaVersion: 3,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -635,7 +635,8 @@ extension AppDatabase {
                 workoutExercises: try WorkoutExercise.fetchAll(db),
                 workoutSets: try WorkoutSet.fetchAll(db),
                 bodyweightEntries: try BodyweightEntry.fetchAll(db),
-                bodyweightPhotos: try BodyweightPhoto.fetchAll(db)
+                bodyweightPhotos: try BodyweightPhoto.fetchAll(db),
+                cardioSessions: try CardioSession.fetchAll(db)
             )
         }
     }
@@ -643,6 +644,7 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try CardioSession.deleteAll(db)
             try BodyweightPhoto.deleteAll(db)
             try BodyweightEntry.deleteAll(db)
             try WorkoutSet.deleteAll(db)
@@ -661,6 +663,7 @@ extension AppDatabase {
             for item in payload.workoutSets { try item.insert(db) }
             for item in payload.bodyweightEntries ?? [] { try item.insert(db) }
             for item in payload.bodyweightPhotos ?? [] { try item.insert(db) }
+            for item in payload.cardioSessions ?? [] { try item.insert(db) }
         }
     }
 }
@@ -710,6 +713,28 @@ extension AppDatabase {
             let filenames = photos.map { $0.imageFilename }
             _ = try BodyweightEntry.deleteOne(db, key: id)
             return filenames
+        }
+    }
+}
+
+// MARK: - Cardio Operations
+
+extension AppDatabase {
+    static func fetchCardioSessions(in db: Database) throws -> [CardioSession] {
+        try CardioSession
+            .order(CardioSession.Columns.startedAt.desc)
+            .fetchAll(db)
+    }
+
+    func saveCardioSession(_ session: CardioSession) throws {
+        try dbWriter.write { db in
+            try session.save(db)
+        }
+    }
+
+    func deleteCardioSession(id: String) throws {
+        try dbWriter.write { db in
+            _ = try CardioSession.deleteOne(db, key: id)
         }
     }
 }

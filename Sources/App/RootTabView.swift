@@ -143,5 +143,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(RestTimerManager())
             .environmentObject(HistoryStore(database: db))
             .environmentObject(BodyweightStore(database: db))
+            .environmentObject(CardioStore(database: db))
     }
 }

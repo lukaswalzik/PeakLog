@@ -6,6 +6,7 @@ struct ProfileBackupView: View {
     @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var restTimerManager: RestTimerManager
     @EnvironmentObject private var bodyweightStore: BodyweightStore
+    @EnvironmentObject private var cardioStore: CardioStore
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
     @State private var isShowingExporter: Bool = false
@@ -14,6 +15,14 @@ struct ProfileBackupView: View {
     @State private var statusAlertTitle: String = ""
     @State private var statusAlertMessage: String = ""
     @State private var isShowingStatusAlert: Bool = false
+
+    private var progressSummary: UserProgressSummary {
+        ProgressEngine.compute(
+            workouts: historyStore.completedWorkouts,
+            cardioSessions: cardioStore.sessions,
+            bodyweightEntries: bodyweightStore.entries
+        )
+    }
 
     private var notificationStatusText: String {
         switch restTimerManager.notificationStatus {
@@ -40,23 +49,53 @@ struct ProfileBackupView: View {
                             color: .blue
                         )
                         ProfileStatTile(
-                            title: "Sätze",
-                            value: "\(historyStore.totalCompletedSets)",
-                            icon: "checkmark.circle.fill",
-                            color: .green
+                            title: "Streak",
+                            value: "\(progressSummary.weeklyStreak) Wo.",
+                            icon: "flame.fill",
+                            color: .orange
                         )
                         ProfileStatTile(
                             title: "Volumen",
                             value: formattedTotalVolume,
                             icon: "scalemass.fill",
-                            color: .orange
+                            color: .green
                         )
                     }
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                     .listRowBackground(Color.clear)
                 }
 
-                Section(header: Text("Körper & Fortschritt")) {
+                Section(header: Text("Fortschritt & Motivation")) {
+                    NavigationLink {
+                        MilestonesView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(AppTheme.heroGradient)
+                                    .frame(width: 40, height: 40)
+                                Text("L\(progressSummary.level)")
+                                    .font(.subheadline)
+                                    .fontWeight(.heavy)
+                                    .foregroundColor(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("Level \(progressSummary.level) · \(progressSummary.rankTitle)")
+                                        .font(.headline)
+                                }
+                                ProgressView(value: progressSummary.levelProgress)
+                                    .progressViewStyle(.linear)
+                                    .tint(.accentColor)
+                                Text("\(progressSummary.unlockedCount)/\(progressSummary.milestones.count) Meilensteine · \(progressSummary.totalXP) XP")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     NavigationLink {
                         BodyweightView()
                     } label: {
@@ -116,6 +155,17 @@ struct ProfileBackupView: View {
                                 }
                                 .padding(.vertical, 2)
                             }
+                        }
+                    }
+                }
+
+                Section(header: Text("Cardio & HF-Zonen")) {
+                    Stepper(value: $cardioStore.maxHeartRate, in: 130...220) {
+                        HStack {
+                            Text("Maximale Herzfrequenz")
+                            Spacer()
+                            Text("\(cardioStore.maxHeartRate) bpm")
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -313,5 +363,6 @@ struct ProfileBackupView_Previews: PreviewProvider {
             .environmentObject(RestTimerManager())
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(BodyweightStore(database: db))
+            .environmentObject(CardioStore(database: db))
     }
 }

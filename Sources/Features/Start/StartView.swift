@@ -4,11 +4,23 @@ struct StartView: View {
     @EnvironmentObject private var routineStore: RoutineStore
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
     @EnvironmentObject private var historyStore: HistoryStore
+    @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var bodyweightStore: BodyweightStore
 
     @State private var isShowingCreateRoutine: Bool = false
     @State private var editingRoutine: RoutineWithExercises? = nil
     @State private var routineToDelete: RoutineWithExercises? = nil
     @State private var isShowingAlreadyActiveAlert: Bool = false
+    @State private var isShowingCardioForm: Bool = false
+    @State private var isShowingLiveCardio: Bool = false
+
+    private var progressSummary: UserProgressSummary {
+        ProgressEngine.compute(
+            workouts: historyStore.completedWorkouts,
+            cardioSessions: cardioStore.sessions,
+            bodyweightEntries: bodyweightStore.entries
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -110,6 +122,16 @@ struct StartView: View {
                     routineStore.saveRoutine(routine, exercises: exercises)
                 }
             }
+            .sheet(isPresented: $isShowingCardioForm) {
+                CardioFormView { session in
+                    cardioStore.save(session)
+                }
+            }
+            .sheet(isPresented: $isShowingLiveCardio) {
+                LiveCardioTimerView { session in
+                    cardioStore.save(session)
+                }
+            }
             .alert(
                 "Routine löschen?",
                 isPresented: Binding(
@@ -161,45 +183,89 @@ struct StartView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text("Level \(progressSummary.level)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.22))
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+
+                        if progressSummary.weeklyStreak > 0 {
+                            Label("\(progressSummary.weeklyStreak) Wo. Streak", systemImage: "flame.fill")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.orange.opacity(0.28))
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
+
                     Text("Bereit fürs Training?")
                         .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                    Text("\(historyStore.totalCompletedWorkouts) Workouts absolviert · \(routineStore.routines.count) Routinen")
+                        .padding(.top, 2)
+
+                    Text("\(progressSummary.rankTitle) · \(progressSummary.sessionsThisWeek) Trainings diese Woche")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.85))
                 }
 
                 Spacer()
-
-                Image(systemName: "flame.fill")
-                    .font(.title2)
-                    .foregroundColor(.orange)
-                    .padding(10)
-                    .background(Color.white.opacity(0.16))
-                    .clipShape(Circle())
             }
 
-            Button {
-                if activeWorkoutManager.hasActiveWorkout {
-                    isShowingAlreadyActiveAlert = true
-                } else {
-                    activeWorkoutManager.startEmptyWorkout()
+            HStack(spacing: 10) {
+                Button {
+                    if activeWorkoutManager.hasActiveWorkout {
+                        isShowingAlreadyActiveAlert = true
+                    } else {
+                        activeWorkoutManager.startEmptyWorkout()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "play.fill")
+                        Text("Kraft starten")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(Color(red: 0.11, green: 0.36, blue: 0.92))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-            } label: {
-                HStack {
-                    Image(systemName: "play.fill")
-                    Text("Leeres Workout starten")
-                        .fontWeight(.semibold)
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button {
+                        isShowingLiveCardio = true
+                    } label: {
+                        Label("Live Cardio-Timer", systemImage: "stopwatch.fill")
+                    }
+                    Button {
+                        isShowingCardioForm = true
+                    } label: {
+                        Label("Cardio manuell eintragen", systemImage: "plus.circle")
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "heart.fill")
+                        Text("Cardio")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(Color.white.opacity(0.20))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .font(.subheadline)
-                .foregroundColor(Color(red: 0.11, green: 0.36, blue: 0.92))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .buttonStyle(.plain)
         }
         .padding(16)
         .background(AppTheme.heroGradient)
@@ -316,5 +382,7 @@ struct StartView_Previews: PreviewProvider {
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(ActiveWorkoutManager(database: db))
             .environmentObject(HistoryStore(database: db))
+            .environmentObject(CardioStore(database: db))
+            .environmentObject(BodyweightStore(database: db))
     }
 }
