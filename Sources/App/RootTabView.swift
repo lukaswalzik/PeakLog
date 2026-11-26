@@ -9,6 +9,7 @@ struct RootTabView: View {
     }
 
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+    @EnvironmentObject private var restTimerManager: RestTimerManager
     @State private var selectedTab: Tab = .start
 
     var body: some View {
@@ -58,7 +59,10 @@ struct RootTabView: View {
             }
 
             if let detail = activeWorkoutManager.activeWorkout, !activeWorkoutManager.isPresentingSheet {
-                ActiveWorkoutBanner(detail: detail) {
+                ActiveWorkoutBanner(
+                    detail: detail,
+                    restTimerManager: restTimerManager
+                ) {
                     activeWorkoutManager.isPresentingSheet = true
                 }
                 .padding(.horizontal, 12)
@@ -69,12 +73,24 @@ struct RootTabView: View {
         .sheet(isPresented: $activeWorkoutManager.isPresentingSheet) {
             ActiveWorkoutView()
         }
+        .onChange(of: activeWorkoutManager.hasActiveWorkout) { isActive in
+            if !isActive {
+                restTimerManager.skip()
+            }
+        }
     }
 }
 
 private struct ActiveWorkoutBanner: View {
     let detail: WorkoutDetail
+    @ObservedObject var restTimerManager: RestTimerManager
     let onTap: () -> Void
+
+    private var formattedRest: String {
+        let mins = restTimerManager.remainingSeconds / 60
+        let secs = restTimerManager.remainingSeconds % 60
+        return String(format: "%02d:%02d", mins, secs)
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -100,6 +116,22 @@ private struct ActiveWorkoutBanner: View {
 
                 Spacer()
 
+                if restTimerManager.isRunning {
+                    HStack(spacing: 4) {
+                        Image(systemName: "timer")
+                            .font(.caption)
+                        Text(formattedRest)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.15))
+                    .foregroundColor(.accentColor)
+                    .clipShape(Capsule())
+                }
+
                 Image(systemName: "chevron.up")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -122,5 +154,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(RoutineStore(database: db))
             .environmentObject(ActiveWorkoutManager(database: db))
+            .environmentObject(RestTimerManager())
     }
 }

@@ -3,6 +3,7 @@ import UIKit
 
 struct ActiveWorkoutView: View {
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+    @EnvironmentObject private var restTimerManager: RestTimerManager
 
     @State private var workoutName: String = ""
     @State private var workoutNotes: String = ""
@@ -70,6 +71,12 @@ struct ActiveWorkoutView: View {
                         .padding(.top, 12)
                     }
                     .background(Color(uiColor: .systemGroupedBackground))
+                    .safeAreaInset(edge: .bottom) {
+                        if restTimerManager.isRunning {
+                            RestTimerBarView(timerManager: restTimerManager)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
                     .onAppear {
                         if !hasLoadedHeader {
                             workoutName = detail.workout.name
@@ -88,14 +95,40 @@ struct ActiveWorkoutView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        dismissKeyboard()
-                        activeWorkoutManager.isPresentingSheet = false
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.headline)
+                    HStack(spacing: 12) {
+                        Button {
+                            dismissKeyboard()
+                            activeWorkoutManager.isPresentingSheet = false
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.headline)
+                        }
+                        .accessibilityLabel("Workout minimieren")
+
+                        Menu {
+                            Section("Pausentimer starten") {
+                                Button("60 Sekunden") { restTimerManager.start(seconds: 60) }
+                                Button("90 Sekunden") { restTimerManager.start(seconds: 90) }
+                                Button("2 Minuten") { restTimerManager.start(seconds: 120) }
+                                Button("3 Minuten") { restTimerManager.start(seconds: 180) }
+                            }
+                            Section {
+                                Button {
+                                    restTimerManager.autoStartEnabled.toggle()
+                                } label: {
+                                    Label(
+                                        restTimerManager.autoStartEnabled ? "Auto-Pause: An" : "Auto-Pause: Aus",
+                                        systemImage: restTimerManager.autoStartEnabled ? "checkmark.circle.fill" : "circle"
+                                    )
+                                }
+                            }
+                        } label: {
+                            Image(systemName: restTimerManager.isRunning ? "timer.circle.fill" : "timer")
+                                .font(.headline)
+                                .foregroundColor(restTimerManager.isRunning ? .accentColor : .primary)
+                        }
+                        .accessibilityLabel("Pausentimer")
                     }
-                    .accessibilityLabel("Workout minimieren")
                 }
 
                 ToolbarItem(placement: .principal) {
@@ -300,5 +333,6 @@ struct ActiveWorkoutView_Previews: PreviewProvider {
         ActiveWorkoutView()
             .environmentObject(ActiveWorkoutManager(database: db))
             .environmentObject(ExerciseStore(database: db))
+            .environmentObject(RestTimerManager())
     }
 }
