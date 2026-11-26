@@ -232,7 +232,7 @@ struct AIPlanGeneratorView: View {
                         defaultRestSeconds: spec.restSeconds,
                         isCustom: true
                     )
-                    exerciseStore.saveExercise(created)
+                    exerciseStore.save(created)
                     exerciseId = created.id
                 }
 
