@@ -58,6 +58,7 @@ struct FoodItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
     var calciumMgPer100g: Double
     var ironMgPer100g: Double
     var isCustom: Bool
+    var isFavorite: Bool
     var createdAt: Date
 
     enum Columns {
@@ -77,6 +78,7 @@ struct FoodItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
         static let calciumMgPer100g = Column(CodingKeys.calciumMgPer100g)
         static let ironMgPer100g = Column(CodingKeys.ironMgPer100g)
         static let isCustom = Column(CodingKeys.isCustom)
+        static let isFavorite = Column(CodingKeys.isFavorite)
         static let createdAt = Column(CodingKeys.createdAt)
     }
 
@@ -97,6 +99,7 @@ struct FoodItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
         calciumMgPer100g: Double = 0,
         ironMgPer100g: Double = 0,
         isCustom: Bool = true,
+        isFavorite: Bool = false,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -115,8 +118,116 @@ struct FoodItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
         self.calciumMgPer100g = calciumMgPer100g
         self.ironMgPer100g = ironMgPer100g
         self.isCustom = isCustom
+        self.isFavorite = isFavorite
         self.createdAt = createdAt
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        brand = try c.decodeIfPresent(String.self, forKey: .brand)
+        barcode = try c.decodeIfPresent(String.self, forKey: .barcode)
+        servingSizeGrams = try c.decodeIfPresent(Double.self, forKey: .servingSizeGrams) ?? 100
+        caloriesPer100g = try c.decode(Double.self, forKey: .caloriesPer100g)
+        proteinPer100g = try c.decode(Double.self, forKey: .proteinPer100g)
+        carbsPer100g = try c.decode(Double.self, forKey: .carbsPer100g)
+        fatPer100g = try c.decode(Double.self, forKey: .fatPer100g)
+        fiberPer100g = try c.decodeIfPresent(Double.self, forKey: .fiberPer100g) ?? 0
+        sugarPer100g = try c.decodeIfPresent(Double.self, forKey: .sugarPer100g) ?? 0
+        saltPer100g = try c.decodeIfPresent(Double.self, forKey: .saltPer100g) ?? 0
+        vitaminCMgPer100g = try c.decodeIfPresent(Double.self, forKey: .vitaminCMgPer100g) ?? 0
+        calciumMgPer100g = try c.decodeIfPresent(Double.self, forKey: .calciumMgPer100g) ?? 0
+        ironMgPer100g = try c.decodeIfPresent(Double.self, forKey: .ironMgPer100g) ?? 0
+        isCustom = try c.decodeIfPresent(Bool.self, forKey: .isCustom) ?? true
+        isFavorite = try c.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+}
+
+struct SavedMeal: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "saved_meals"
+
+    var id: String
+    var name: String
+    var notes: String?
+    var createdAt: Date
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let name = Column(CodingKeys.name)
+        static let notes = Column(CodingKeys.notes)
+        static let createdAt = Column(CodingKeys.createdAt)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        name: String,
+        notes: String? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.notes = notes
+        self.createdAt = createdAt
+    }
+}
+
+struct SavedMealItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "saved_meal_items"
+
+    var id: String
+    var mealId: String
+    var foodItemId: String
+    var grams: Double
+    var sortOrder: Int
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let mealId = Column(CodingKeys.mealId)
+        static let foodItemId = Column(CodingKeys.foodItemId)
+        static let grams = Column(CodingKeys.grams)
+        static let sortOrder = Column(CodingKeys.sortOrder)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        mealId: String,
+        foodItemId: String,
+        grams: Double,
+        sortOrder: Int = 0
+    ) {
+        self.id = id
+        self.mealId = mealId
+        self.foodItemId = foodItemId
+        self.grams = grams
+        self.sortOrder = sortOrder
+    }
+}
+
+struct SavedMealItemDetail: Identifiable, Equatable, Hashable {
+    var item: SavedMealItem
+    var food: FoodItem
+
+    var id: String { item.id }
+
+    private var factor: Double { item.grams / 100.0 }
+    var calories: Double { food.caloriesPer100g * factor }
+    var protein: Double { food.proteinPer100g * factor }
+    var carbs: Double { food.carbsPer100g * factor }
+    var fat: Double { food.fatPer100g * factor }
+}
+
+struct SavedMealWithItems: Identifiable, Equatable, Hashable {
+    var meal: SavedMeal
+    var items: [SavedMealItemDetail]
+
+    var id: String { meal.id }
+
+    var totalCalories: Double { items.reduce(0) { $0 + $1.calories } }
+    var totalProtein: Double { items.reduce(0) { $0 + $1.protein } }
+    var totalCarbs: Double { items.reduce(0) { $0 + $1.carbs } }
+    var totalFat: Double { items.reduce(0) { $0 + $1.fat } }
 }
 
 struct FoodLogEntry: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {

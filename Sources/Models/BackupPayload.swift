@@ -17,9 +17,11 @@ struct BackupPayload: Codable {
     var gyms: [Gym]?
     var foodItems: [FoodItem]?
     var foodLogEntries: [FoodLogEntry]?
+    var savedMeals: [SavedMeal]?
+    var savedMealItems: [SavedMealItem]?
 
     init(
-        schemaVersion: Int = 5,
+        schemaVersion: Int = 6,
         exportedAt: Date = Date(),
         exercises: [Exercise],
         routines: [Routine],
@@ -32,7 +34,9 @@ struct BackupPayload: Codable {
         cardioSessions: [CardioSession]? = nil,
         gyms: [Gym]? = nil,
         foodItems: [FoodItem]? = nil,
-        foodLogEntries: [FoodLogEntry]? = nil
+        foodLogEntries: [FoodLogEntry]? = nil,
+        savedMeals: [SavedMeal]? = nil,
+        savedMealItems: [SavedMealItem]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.exportedAt = exportedAt
@@ -48,6 +52,8 @@ struct BackupPayload: Codable {
         self.gyms = gyms
         self.foodItems = foodItems
         self.foodLogEntries = foodLogEntries
+        self.savedMeals = savedMeals
+        self.savedMealItems = savedMealItems
     }
 }
 

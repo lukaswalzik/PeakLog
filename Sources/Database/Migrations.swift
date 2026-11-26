@@ -212,6 +212,33 @@ enum Migrations {
             try SeedFoods.insertDefaultFoods(in: db)
         }
 
+        migrator.registerMigration("v7_nutrition_meals_and_favorites") { db in
+            try db.alter(table: "food_items") { t in
+                t.add(column: "isFavorite", .boolean).notNull().defaults(to: false)
+            }
+
+            try db.create(table: "saved_meals") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("notes", .text)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "saved_meal_items") { t in
+                t.column("id", .text).primaryKey()
+                t.column("mealId", .text).notNull().references("saved_meals", onDelete: .cascade)
+                t.column("foodItemId", .text).notNull().references("food_items", onDelete: .cascade)
+                t.column("grams", .double).notNull()
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+            }
+
+            try db.create(
+                index: "idx_saved_meal_items_mealId",
+                on: "saved_meal_items",
+                columns: ["mealId", "sortOrder"]
+            )
+        }
+
         return migrator
     }
 }

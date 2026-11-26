@@ -10,6 +10,7 @@ final class NutritionStore: ObservableObject {
         }
     }
     @Published private(set) var foodItems: [FoodItem] = []
+    @Published private(set) var savedMeals: [SavedMealWithItems] = []
     @Published private(set) var dayEntries: [FoodLogEntryDetail] = []
     @Published var goals: NutritionGoals {
         didSet {
@@ -20,6 +21,7 @@ final class NutritionStore: ObservableObject {
 
     private let database: AppDatabase
     private var foodsCancellable: AnyDatabaseCancellable?
+    private var mealsCancellable: AnyDatabaseCancellable?
     private var dayCancellable: AnyDatabaseCancellable?
 
     init(database: AppDatabase) {
@@ -33,11 +35,16 @@ final class NutritionStore: ObservableObject {
             self.goals = initial
         }
         startFoodsObservation()
+        startSavedMealsObservation()
         startDayObservation(for: selectedDate)
     }
 
     var dayTotals: DailyNutritionTotals {
         DailyNutritionTotals.from(dayEntries)
+    }
+
+    var favoriteFoods: [FoodItem] {
+        foodItems.filter { $0.isFavorite }
     }
 
     func entries(for mealType: MealType) -> [FoodLogEntryDetail] {
@@ -77,6 +84,23 @@ final class NutritionStore: ObservableObject {
         )
     }
 
+    private func startSavedMealsObservation() {
+        let observation = ValueObservation.tracking { db in
+            try AppDatabase.fetchSavedMealsWithItems(in: db)
+        }
+
+        mealsCancellable = observation.start(
+            in: database.dbWriter,
+            scheduling: .async(onQueue: .main),
+            onError: { [weak self] error in
+                self?.errorMessage = "Gespeicherte Mahlzeiten konnten nicht geladen werden: \(error.localizedDescription)"
+            },
+            onChange: { [weak self] meals in
+                self?.savedMeals = meals
+            }
+        )
+    }
+
     private func startDayObservation(for date: Date) {
         dayCancellable?.cancel()
         let observation = ValueObservation.tracking { db in
@@ -107,12 +131,31 @@ final class NutritionStore: ObservableObject {
         }
     }
 
+    func toggleFavorite(for item: FoodItem) {
+        do {
+            if !foodItems.contains(where: { $0.id == item.id }) {
+                var copy = item
+                copy.isFavorite = true
+                try database.saveFoodItem(copy)
+            } else {
+                try database.toggleFoodFavorite(id: item.id, isFavorite: !item.isFavorite)
+            }
+        } catch {
+            errorMessage = "Favorit konnte nicht geändert werden: \(error.localizedDescription)"
+        }
+    }
+
     func logFood(_ item: FoodItem, mealType: MealType, grams: Double, date: Date? = nil) {
         do {
-            try database.saveFoodItem(item)
+            // Preserve existing favorite flag if food already exists locally
+            var itemToSave = item
+            if let existing = foodItems.first(where: { $0.id == item.id }) {
+                itemToSave.isFavorite = existing.isFavorite
+            }
+            try database.saveFoodItem(itemToSave)
             let targetDate = date ?? selectedDate
             let entry = FoodLogEntry(
-                foodItemId: item.id,
+                foodItemId: itemToSave.id,
                 loggedAt: targetDate,
                 mealType: mealType,
                 grams: max(1, grams)
@@ -128,6 +171,30 @@ final class NutritionStore: ObservableObject {
             try database.deleteFoodLogEntry(id: id)
         } catch {
             errorMessage = "Eintrag konnte nicht gelöscht werden: \(error.localizedDescription)"
+        }
+    }
+
+    func saveSavedMeal(_ meal: SavedMeal, items: [SavedMealItem]) {
+        do {
+            try database.saveSavedMeal(meal, items: items)
+        } catch {
+            errorMessage = "Mahlzeit konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteSavedMeal(id: String) {
+        do {
+            try database.deleteSavedMeal(id: id)
+        } catch {
+            errorMessage = "Mahlzeit konnte nicht gelöscht werden: \(error.localizedDescription)"
+        }
+    }
+
+    func logSavedMeal(_ meal: SavedMealWithItems, mealType: MealType, multiplier: Double = 1.0, date: Date? = nil) {
+        do {
+            try database.logSavedMeal(meal, mealType: mealType, multiplier: multiplier, date: date ?? selectedDate)
+        } catch {
+            errorMessage = "Mahlzeit konnte nicht geloggt werden: \(error.localizedDescription)"
         }
     }
 }

@@ -18,7 +18,7 @@ enum OpenFoodFactsError: LocalizedError {
 }
 
 enum OpenFoodFactsService {
-    private static let userAgent = "StrongTracker-iOS/0.4 (local fitness tracker)"
+    private static let userAgent = "StrongTracker-iOS/0.4.1 (local fitness tracker)"
 
     static func fetchProduct(barcode: String) async throws -> FoodItem {
         let cleaned = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,7 +28,8 @@ enum OpenFoodFactsService {
 
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 18
 
         let (data, response): (Data, URLResponse)
         do {
@@ -53,17 +54,42 @@ enum OpenFoodFactsService {
 
     static func searchProducts(query: String) async throws -> [FoodItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(
-                string: "https://de.openfoodfacts.org/cgi/search.pl?search_terms=\(encoded)&search_simple=1&action=process&json=1&page_size=20&fields=code,product_name,product_name_de,brands,serving_quantity,nutriments"
-              ) else {
+        guard !trimmed.isEmpty else { return [] }
+
+        // Try German Open Food Facts first, fallback to world if needed
+        do {
+            let results = try await performSearch(host: "de.openfoodfacts.org", query: trimmed)
+            if !results.isEmpty {
+                return results
+            }
+            return try await performSearch(host: "world.openfoodfacts.org", query: trimmed)
+        } catch {
+            return try await performSearch(host: "world.openfoodfacts.org", query: trimmed)
+        }
+    }
+
+    private static func performSearch(host: String, query: String) async throws -> [FoodItem] {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = "/cgi/search.pl"
+        components.queryItems = [
+            URLQueryItem(name: "search_terms", value: query),
+            URLQueryItem(name: "search_simple", value: "1"),
+            URLQueryItem(name: "action", value: "process"),
+            URLQueryItem(name: "json", value: "1"),
+            URLQueryItem(name: "page_size", value: "25"),
+            URLQueryItem(name: "fields", value: "code,product_name,product_name_de,brands,serving_quantity,nutriments")
+        ]
+
+        guard let url = components.url else {
             throw OpenFoodFactsError.invalidURL
         }
 
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 20
 
         let (data, _): (Data, URLResponse)
         do {
@@ -81,9 +107,10 @@ enum OpenFoodFactsService {
     }
 
     private static func parseProduct(_ dict: [String: Any], fallbackBarcode: String?) -> FoodItem? {
-        let rawName = (dict["product_name_de"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? (dict["product_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let name = rawName, !name.isEmpty else { return nil }
+        let deName = (dict["product_name_de"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let defaultName = (dict["product_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name = !deName.isEmpty ? deName : defaultName
+        guard !name.isEmpty else { return nil }
 
         let brand = (dict["brands"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let barcode = (dict["code"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? fallbackBarcode
@@ -107,7 +134,6 @@ enum OpenFoodFactsService {
         let sugar = doubleValue(nutriments["sugars_100g"]) ?? 0
         let salt = doubleValue(nutriments["salt_100g"]) ?? 0
 
-        // Open Food Facts typically returns vitamin-c, calcium, iron in grams per 100g
         let rawVitC = doubleValue(nutriments["vitamin-c_100g"]) ?? 0
         let vitCMg = rawVitC > 0 && rawVitC < 1.0 ? rawVitC * 1000.0 : rawVitC
 
@@ -120,7 +146,7 @@ enum OpenFoodFactsService {
         let servingGrams = doubleValue(dict["serving_quantity"]) ?? 100
 
         return FoodItem(
-            id: barcode.map { "off-\($0)" } ?? UUID().uuidString,
+            id: (barcode?.isEmpty == false) ? "off-\(barcode!)" : UUID().uuidString,
             name: name,
             brand: (brand?.isEmpty ?? true) ? nil : brand,
             barcode: (barcode?.isEmpty ?? true) ? nil : barcode,
@@ -135,7 +161,8 @@ enum OpenFoodFactsService {
             vitaminCMgPer100g: max(0, vitCMg),
             calciumMgPer100g: max(0, calciumMg),
             ironMgPer100g: max(0, ironMg),
-            isCustom: false
+            isCustom: false,
+            isFavorite: false
         )
     }
 

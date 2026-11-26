@@ -7,6 +7,7 @@ struct NutritionView: View {
     @State private var openScannerDirectly: Bool = false
     @State private var isShowingGoalsSheet: Bool = false
     @State private var showMicrosExpanded: Bool = false
+    @State private var mealToSaveAsTemplate: MealType? = nil
 
     private var totals: DailyNutritionTotals {
         nutritionStore.dayTotals
@@ -77,6 +78,15 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $isShowingGoalsSheet) {
                 NutritionGoalsView(initialGoals: nutritionStore.goals)
+            }
+            .sheet(item: $mealToSaveAsTemplate) { meal in
+                let logged = nutritionStore.entries(for: meal)
+                SavedMealEditorView(
+                    prefilledName: "Mein \(meal.displayName)",
+                    prefilledIngredients: logged.map { ($0.food, $0.entry.grams) }
+                ) { savedMeal, items in
+                    nutritionStore.saveSavedMeal(savedMeal, items: items)
+                }
             }
         }
     }
@@ -282,6 +292,17 @@ struct NutritionView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+
+                        Divider()
+                        Button {
+                            mealToSaveAsTemplate = meal
+                        } label: {
+                            Label("Als Vorlage-Mahlzeit speichern", systemImage: "bookmark.fill")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

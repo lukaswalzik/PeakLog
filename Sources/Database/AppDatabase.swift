@@ -663,7 +663,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 5,
+                schemaVersion: 6,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -676,7 +676,9 @@ extension AppDatabase {
                 cardioSessions: try CardioSession.fetchAll(db),
                 gyms: try Gym.fetchAll(db),
                 foodItems: try FoodItem.fetchAll(db),
-                foodLogEntries: try FoodLogEntry.fetchAll(db)
+                foodLogEntries: try FoodLogEntry.fetchAll(db),
+                savedMeals: try SavedMeal.fetchAll(db),
+                savedMealItems: try SavedMealItem.fetchAll(db)
             )
         }
     }
@@ -684,6 +686,8 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try SavedMealItem.deleteAll(db)
+            try SavedMeal.deleteAll(db)
             try FoodLogEntry.deleteAll(db)
             try FoodItem.deleteAll(db)
             try CardioSession.deleteAll(db)
@@ -714,6 +718,8 @@ extension AppDatabase {
                 try SeedFoods.insertDefaultFoods(in: db)
             }
             for item in payload.foodLogEntries ?? [] { try item.insert(db) }
+            for item in payload.savedMeals ?? [] { try item.insert(db) }
+            for item in payload.savedMealItems ?? [] { try item.insert(db) }
         }
     }
 }
@@ -825,8 +831,44 @@ extension AppDatabase {
 extension AppDatabase {
     static func fetchFoodItems(in db: Database) throws -> [FoodItem] {
         try FoodItem
-            .order(FoodItem.Columns.name.collating(.localizedCaseInsensitiveCompare))
+            .order(
+                FoodItem.Columns.isFavorite.desc,
+                FoodItem.Columns.name.collating(.localizedCaseInsensitiveCompare)
+            )
             .fetchAll(db)
+    }
+
+    static func fetchSavedMealsWithItems(in db: Database) throws -> [SavedMealWithItems] {
+        let meals = try SavedMeal
+            .order(SavedMeal.Columns.name.collating(.localizedCaseInsensitiveCompare))
+            .fetchAll(db)
+
+        guard !meals.isEmpty else { return [] }
+
+        let allItems = try SavedMealItem
+            .order(SavedMealItem.Columns.sortOrder.asc)
+            .fetchAll(db)
+
+        let foodIds = Set(allItems.map { $0.foodItemId })
+        let foodsById: [String: FoodItem]
+        if foodIds.isEmpty {
+            foodsById = [:]
+        } else {
+            let foods = try FoodItem
+                .filter(foodIds.contains(FoodItem.Columns.id))
+                .fetchAll(db)
+            foodsById = Dictionary(uniqueKeysWithValues: foods.map { ($0.id, $0) })
+        }
+
+        let grouped = Dictionary(grouping: allItems, by: { $0.mealId })
+
+        return meals.map { meal in
+            let details = (grouped[meal.id] ?? []).compactMap { item -> SavedMealItemDetail? in
+                guard let food = foodsById[item.foodItemId] else { return nil }
+                return SavedMealItemDetail(item: item, food: food)
+            }
+            return SavedMealWithItems(meal: meal, items: details)
+        }
     }
 
     static func fetchFoodLogEntries(forDay day: Date, in db: Database) throws -> [FoodLogEntryDetail] {
@@ -867,6 +909,15 @@ extension AppDatabase {
         }
     }
 
+    func toggleFoodFavorite(id: String, isFavorite: Bool) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE food_items SET isFavorite = ? WHERE id = ?",
+                arguments: [isFavorite, id]
+            )
+        }
+    }
+
     func deleteFoodItem(id: String) throws {
         try dbWriter.write { db in
             _ = try FoodItem.deleteOne(db, key: id)
@@ -882,6 +933,40 @@ extension AppDatabase {
     func deleteFoodLogEntry(id: String) throws {
         try dbWriter.write { db in
             _ = try FoodLogEntry.deleteOne(db, key: id)
+        }
+    }
+
+    func saveSavedMeal(_ meal: SavedMeal, items: [SavedMealItem]) throws {
+        try dbWriter.write { db in
+            try meal.save(db)
+            try SavedMealItem
+                .filter(SavedMealItem.Columns.mealId == meal.id)
+                .deleteAll(db)
+            for (index, var item) in items.enumerated() {
+                item.mealId = meal.id
+                item.sortOrder = index
+                try item.insert(db)
+            }
+        }
+    }
+
+    func deleteSavedMeal(id: String) throws {
+        try dbWriter.write { db in
+            _ = try SavedMeal.deleteOne(db, key: id)
+        }
+    }
+
+    func logSavedMeal(_ meal: SavedMealWithItems, mealType: MealType, multiplier: Double, date: Date) throws {
+        try dbWriter.write { db in
+            for detail in meal.items {
+                let entry = FoodLogEntry(
+                    foodItemId: detail.food.id,
+                    loggedAt: date,
+                    mealType: mealType,
+                    grams: max(1, detail.item.grams * multiplier)
+                )
+                try entry.insert(db)
+            }
         }
     }
 }
