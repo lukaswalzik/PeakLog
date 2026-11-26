@@ -626,14 +626,16 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 1,
+                schemaVersion: 2,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
                 routineExercises: try RoutineExercise.fetchAll(db),
                 workouts: try Workout.fetchAll(db),
                 workoutExercises: try WorkoutExercise.fetchAll(db),
-                workoutSets: try WorkoutSet.fetchAll(db)
+                workoutSets: try WorkoutSet.fetchAll(db),
+                bodyweightEntries: try BodyweightEntry.fetchAll(db),
+                bodyweightPhotos: try BodyweightPhoto.fetchAll(db)
             )
         }
     }
@@ -641,6 +643,8 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try BodyweightPhoto.deleteAll(db)
+            try BodyweightEntry.deleteAll(db)
             try WorkoutSet.deleteAll(db)
             try WorkoutExercise.deleteAll(db)
             try Workout.deleteAll(db)
@@ -655,6 +659,57 @@ extension AppDatabase {
             for item in payload.workouts { try item.insert(db) }
             for item in payload.workoutExercises { try item.insert(db) }
             for item in payload.workoutSets { try item.insert(db) }
+            for item in payload.bodyweightEntries ?? [] { try item.insert(db) }
+            for item in payload.bodyweightPhotos ?? [] { try item.insert(db) }
+        }
+    }
+}
+
+// MARK: - Bodyweight Operations
+
+extension AppDatabase {
+    static func fetchBodyweightEntriesWithPhotos(in db: Database) throws -> [BodyweightEntryWithPhotos] {
+        let entries = try BodyweightEntry
+            .order(BodyweightEntry.Columns.recordedAt.desc)
+            .fetchAll(db)
+
+        guard !entries.isEmpty else { return [] }
+
+        let allPhotos = try BodyweightPhoto
+            .order(BodyweightPhoto.Columns.createdAt.asc)
+            .fetchAll(db)
+        let photosByEntry = Dictionary(grouping: allPhotos, by: { $0.entryId })
+
+        return entries.map { entry in
+            BodyweightEntryWithPhotos(
+                entry: entry,
+                photos: photosByEntry[entry.id] ?? []
+            )
+        }
+    }
+
+    func saveBodyweightEntry(_ entry: BodyweightEntry, photos: [BodyweightPhoto]) throws {
+        try dbWriter.write { db in
+            try entry.save(db)
+            try BodyweightPhoto
+                .filter(BodyweightPhoto.Columns.entryId == entry.id)
+                .deleteAll(db)
+            for photo in photos {
+                var normalized = photo
+                normalized.entryId = entry.id
+                try normalized.insert(db)
+            }
+        }
+    }
+
+    func deleteBodyweightEntry(id: String) throws -> [String] {
+        try dbWriter.write { db in
+            let photos = try BodyweightPhoto
+                .filter(BodyweightPhoto.Columns.entryId == id)
+                .fetchAll(db)
+            let filenames = photos.map { $0.imageFilename }
+            _ = try BodyweightEntry.deleteOne(db, key: id)
+            return filenames
         }
     }
 }

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ProfileBackupView: View {
     @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var restTimerManager: RestTimerManager
+    @EnvironmentObject private var bodyweightStore: BodyweightStore
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
     @State private var isShowingExporter: Bool = false
@@ -53,6 +54,36 @@ struct ProfileBackupView: View {
                     }
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                     .listRowBackground(Color.clear)
+                }
+
+                Section(header: Text("Körper & Fortschritt")) {
+                    NavigationLink {
+                        BodyweightView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "figure.stand")
+                                .font(.title3)
+                                .foregroundColor(.purple)
+                                .frame(width: 40, height: 40)
+                                .background(Color.purple.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Körpergewicht & Fotos")
+                                    .font(.headline)
+                                if let latest = bodyweightStore.latestEntry {
+                                    Text("Aktuell \(Formatters.weight(latest.entry.weightKg)) kg · \(bodyweightStore.allPhotosTimeline.count) Fotos")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Gewichtsverlauf & Vorher/Nachher-Fotos")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
 
                 Section(header: Text("Top PRs (geschätztes 1RM)")) {
@@ -281,5 +312,6 @@ struct ProfileBackupView_Previews: PreviewProvider {
             .environmentObject(HistoryStore(database: db))
             .environmentObject(RestTimerManager())
             .environmentObject(ExerciseStore(database: db))
+            .environmentObject(BodyweightStore(database: db))
     }
 }

@@ -19,8 +19,16 @@ struct ExerciseDetailView: View {
         exerciseStore.exercises.first(where: { $0.id == exercise.id }) ?? exercise
     }
 
-    private var exerciseImage: UIImage? {
+    private var customExerciseImage: UIImage? {
         MediaStorage.shared.loadImage(filename: currentExercise.imageFilename, in: .exercises)
+    }
+
+    private var exerciseImage: UIImage? {
+        MediaStorage.shared.loadExerciseImage(for: currentExercise)
+    }
+
+    private var isUsingBundledIllustration: Bool {
+        customExerciseImage == nil && exerciseImage != nil
     }
 
     private var chartPoints: [ExerciseProgressPoint] {
@@ -96,12 +104,24 @@ struct ExerciseDetailView: View {
                     fullscreenImage = image
                 } label: {
                     ZStack(alignment: .bottomTrailing) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        Group {
+                            if isUsingBundledIllustration {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 220)
+                                    .background(Color.white)
+                            } else {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 220)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.caption)

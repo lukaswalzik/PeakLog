@@ -73,6 +73,32 @@ final class MediaStorage {
         return image
     }
 
+    func loadBundledExerciseImage(exerciseId: String) -> UIImage? {
+        let key = "Bundled/\(exerciseId)" as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        let url = Bundle.main.url(forResource: exerciseId, withExtension: "jpg", subdirectory: "ExerciseImages")
+            ?? Bundle.main.url(forResource: exerciseId, withExtension: "jpg")
+
+        guard let fileURL = url,
+              let data = try? Data(contentsOf: fileURL),
+              let image = UIImage(data: data) else {
+            return nil
+        }
+
+        cache.setObject(image, forKey: key)
+        return image
+    }
+
+    func loadExerciseImage(for exercise: Exercise) -> UIImage? {
+        if let custom = loadImage(filename: exercise.imageFilename, in: .exercises) {
+            return custom
+        }
+        return loadBundledExerciseImage(exerciseId: exercise.id)
+    }
+
     func deleteImage(filename: String?, in folder: MediaFolder) {
         guard let filename = filename, !filename.isEmpty else { return }
         cache.removeObject(forKey: cacheKey(filename: filename, folder: folder))

@@ -104,6 +104,34 @@ enum Migrations {
             }
         }
 
+        migrator.registerMigration("v3_bodyweight") { db in
+            try db.create(table: "bodyweight_entries") { t in
+                t.column("id", .text).primaryKey()
+                t.column("recordedAt", .datetime).notNull()
+                t.column("weightKg", .double).notNull()
+                t.column("notes", .text)
+            }
+
+            try db.create(table: "bodyweight_photos") { t in
+                t.column("id", .text).primaryKey()
+                t.column("entryId", .text).notNull().references("bodyweight_entries", onDelete: .cascade)
+                t.column("imageFilename", .text).notNull()
+                t.column("caption", .text)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(
+                index: "idx_bodyweight_entries_recordedAt",
+                on: "bodyweight_entries",
+                columns: ["recordedAt"]
+            )
+            try db.create(
+                index: "idx_bodyweight_photos_entryId",
+                on: "bodyweight_photos",
+                columns: ["entryId"]
+            )
+        }
+
         return migrator
     }
 }

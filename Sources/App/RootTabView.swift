@@ -142,5 +142,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(ActiveWorkoutManager(database: db))
             .environmentObject(RestTimerManager())
             .environmentObject(HistoryStore(database: db))
+            .environmentObject(BodyweightStore(database: db))
     }
 }

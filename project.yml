@@ -27,6 +27,8 @@ targets:
     deploymentTarget: "16.5"
     sources:
       - path: Sources
+      - path: Resources/ExerciseImages
+        type: folder
     dependencies:
       - package: GRDB
         product: GRDB

@@ -240,7 +240,7 @@ struct ActiveWorkoutView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
                 Button {
-                    if let img = MediaStorage.shared.loadImage(filename: exerciseDetail.exercise.imageFilename, in: .exercises) {
+                    if let img = MediaStorage.shared.loadExerciseImage(for: exerciseDetail.exercise) {
                         fullscreenPhoto = (img, exerciseDetail.exercise.name)
                     }
                 } label: {

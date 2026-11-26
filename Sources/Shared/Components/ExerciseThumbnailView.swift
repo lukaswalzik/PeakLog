@@ -7,15 +7,16 @@ struct ExerciseThumbnailView: View {
 
     var body: some View {
         Group {
-            if let image = MediaStorage.shared.loadImage(filename: exercise.imageFilename, in: .exercises) {
+            if let image = MediaStorage.shared.loadExerciseImage(for: exercise) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(width: size, height: size)
+                    .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Color.primary.opacity(0.10), lineWidth: 0.75)
                     )
             } else {
                 ZStack {
