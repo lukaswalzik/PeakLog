@@ -7,6 +7,7 @@ struct StartView: View {
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var bodyweightStore: BodyweightStore
     @EnvironmentObject private var gymStore: GymStore
+    @EnvironmentObject private var nutritionStore: NutritionStore
 
     @State private var isShowingCreateRoutine: Bool = false
     @State private var editingRoutine: RoutineWithExercises? = nil
@@ -30,6 +31,12 @@ struct StartView: View {
                 Section {
                     heroQuickStartCard
                         .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowBackground(Color.clear)
+                }
+
+                Section {
+                    weeklyDigestCard
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                         .listRowBackground(Color.clear)
                 }
 
@@ -332,6 +339,96 @@ struct StartView: View {
         .background(AppTheme.heroGradient)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.blue.opacity(0.22), radius: 8, x: 0, y: 4)
+    }
+
+    private var weeklyDigestCard: some View {
+        let cal = Calendar.current
+        let now = Date()
+        let weekAgo = cal.date(byAdding: .day, value: -7, to: now) ?? now
+        let twoWeeksAgo = cal.date(byAdding: .day, value: -14, to: now) ?? now
+
+        let thisWeekWorkouts = historyStore.completedWorkouts.filter { $0.workout.startedAt >= weekAgo }
+        let prevWeekWorkouts = historyStore.completedWorkouts.filter {
+            $0.workout.startedAt >= twoWeeksAgo && $0.workout.startedAt < weekAgo
+        }
+        let thisWeekVolume = thisWeekWorkouts.reduce(0.0) { $0 + $1.totalVolumeKg }
+        let prevWeekVolume = prevWeekWorkouts.reduce(0.0) { $0 + $1.totalVolumeKg }
+
+        let volumeDeltaText: String? = {
+            guard prevWeekVolume > 0, thisWeekVolume > 0 else { return nil }
+            let pct = ((thisWeekVolume - prevWeekVolume) / prevWeekVolume) * 100.0
+            let sign = pct >= 0 ? "+" : ""
+            return "\(sign)\(Int(round(pct)))% vs. Vorwoche"
+        }()
+
+        let thisWeekCardio = cardioStore.sessions.filter { $0.startedAt >= weekAgo }.count
+        let avgKcal = nutritionStore.averageWeeklyCalories
+        let avgProtein = nutritionStore.averageWeeklyProtein
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Wochenrückblick (7 Tage)", systemImage: "chart.line.uptrend.xyaxis")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let delta = volumeDeltaText {
+                    Text(delta)
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.green.opacity(0.14))
+                        .foregroundColor(.green)
+                        .clipShape(Capsule())
+                }
+            }
+
+            HStack(spacing: 8) {
+                digestTile(
+                    value: "\(thisWeekWorkouts.count + thisWeekCardio)",
+                    label: "Sessions",
+                    color: .blue
+                )
+                digestTile(
+                    value: thisWeekVolume >= 1000
+                        ? String(format: "%.1ft", thisWeekVolume / 1000.0)
+                        : "\(Int(round(thisWeekVolume))) kg",
+                    label: "Volumen",
+                    color: .indigo
+                )
+                digestTile(
+                    value: avgKcal > 0 ? "\(avgKcal)" : "–",
+                    label: "Ø kcal",
+                    color: .orange
+                )
+                digestTile(
+                    value: avgProtein > 0 ? "\(avgProtein)g" : "–",
+                    label: "Ø Eiweiß",
+                    color: .green
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard(padding: 12)
+    }
+
+    private func digestTile(value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 7)
+        .background(color.opacity(0.09))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

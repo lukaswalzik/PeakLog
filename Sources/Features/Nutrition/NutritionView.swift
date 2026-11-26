@@ -5,10 +5,14 @@ import UIKit
 struct NutritionView: View {
     @EnvironmentObject private var nutritionStore: NutritionStore
     @EnvironmentObject private var wellnessStore: WellnessStore
+    @EnvironmentObject private var historyStore: HistoryStore
+    @EnvironmentObject private var cardioStore: CardioStore
 
     @State private var addSheetMeal: MealType? = nil
     @State private var openScannerDirectly: Bool = false
     @State private var isShowingGoalsSheet: Bool = false
+    @State private var isShowingAdaptiveTDEE: Bool = false
+    @State private var isShowingMacroHelper: Bool = false
     @State private var showMicrosExpanded: Bool = false
     @State private var showWeeklyTrendExpanded: Bool = false
     @State private var mealToSaveAsTemplate: MealType? = nil
@@ -25,8 +29,28 @@ struct NutritionView: View {
         nutritionStore.goals
     }
 
+    private var autoDetectedTrainingDay: Bool {
+        let cal = Calendar.current
+        let day = nutritionStore.selectedDate
+        let hasWorkout = historyStore.completedWorkouts.contains { cal.isDate($0.workout.startedAt, inSameDayAs: day) }
+        if hasWorkout { return true }
+        return cardioStore.sessions.contains { cal.isDate($0.startedAt, inSameDayAs: day) }
+    }
+
+    private var isTrainingDay: Bool {
+        nutritionStore.isTrainingDay(date: nutritionStore.selectedDate, autoDetected: autoDetectedTrainingDay)
+    }
+
+    private var effectiveTargetCalories: Int {
+        goals.effectiveCalories(isTrainingDay: isTrainingDay)
+    }
+
+    private var effectiveTargetCarbs: Int {
+        goals.effectiveCarbs(isTrainingDay: isTrainingDay)
+    }
+
     private var remainingCalories: Int {
-        goals.targetCalories - Int(round(totals.calories))
+        effectiveTargetCalories - Int(round(totals.calories))
     }
 
     private var dateLabel: String {
@@ -94,6 +118,18 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $isShowingGoalsSheet) {
                 NutritionGoalsView(initialGoals: nutritionStore.goals)
+            }
+            .sheet(isPresented: $isShowingAdaptiveTDEE) {
+                AdaptiveTDEESheetView()
+            }
+            .sheet(isPresented: $isShowingMacroHelper) {
+                MacroHelperSheetView(
+                    remainingCalories: remainingCalories,
+                    remainingProtein: goals.targetProteinGrams - Int(round(totals.protein)),
+                    remainingCarbs: effectiveTargetCarbs - Int(round(totals.carbs)),
+                    remainingFat: goals.targetFatGrams - Int(round(totals.fat)),
+                    defaultMealType: defaultMealForCurrentHour()
+                )
             }
             .sheet(item: $mealToSaveAsTemplate) { meal in
                 let logged = nutritionStore.entries(for: meal)
@@ -177,14 +213,14 @@ struct NutritionView: View {
     }
 
     private var caloriesAndMacrosCard: some View {
-        let calorieProgress = goals.targetCalories > 0
-            ? min(1.0, totals.calories / Double(goals.targetCalories))
+        let calorieProgress = effectiveTargetCalories > 0
+            ? min(1.0, totals.calories / Double(effectiveTargetCalories))
             : 0
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(Int(round(totals.calories))) / \(goals.targetCalories) kcal")
+                    Text("\(Int(round(totals.calories))) / \(effectiveTargetCalories) kcal")
                         .font(.title2)
                         .fontWeight(.bold)
                         .monospacedDigit()
@@ -202,15 +238,37 @@ struct NutritionView: View {
 
                 Spacer()
 
-                Button {
-                    isShowingGoalsSheet = true
-                } label: {
-                    Text("Ziele")
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                if goals.useTrainingDayTargets {
+                    Button {
+                        nutritionStore.toggleTrainingDayOverride(
+                            for: nutritionStore.selectedDate,
+                            currentValue: isTrainingDay
+                        )
+                    } label: {
+                        Label(
+                            isTrainingDay ? "Trainingstag" : "Ruhetag",
+                            systemImage: isTrainingDay ? "flame.fill" : "moon.fill"
+                        )
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background((isTrainingDay ? Color.green : Color.secondary).opacity(0.16))
+                        .foregroundColor(isTrainingDay ? .green : .secondary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        isShowingGoalsSheet = true
+                    } label: {
+                        Text("Ziele")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
 
             ProgressView(value: calorieProgress)
@@ -227,7 +285,7 @@ struct NutritionView: View {
                 MacroProgressColumn(
                     title: "Kohlenhydrate",
                     current: totals.carbs,
-                    target: Double(goals.targetCarbsGrams),
+                    target: Double(effectiveTargetCarbs),
                     color: .orange
                 )
                 MacroProgressColumn(
@@ -236,6 +294,32 @@ struct NutritionView: View {
                     target: Double(goals.targetFatGrams),
                     color: .purple
                 )
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    isShowingMacroHelper = true
+                } label: {
+                    Label("Was fehlt noch?", systemImage: "sparkles")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    isShowingAdaptiveTDEE = true
+                } label: {
+                    Label("Adaptiver TDEE", systemImage: "waveform.path.ecg")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -400,6 +400,11 @@ struct NutritionGoals: Codable, Equatable {
     var targetCarbsGrams: Int = 290
     var targetFatGrams: Int = 75
 
+    // Training-day vs rest-day targets
+    var useTrainingDayTargets: Bool = false
+    var trainingDayCaloriesDelta: Int = 250
+    var trainingDayCarbsDelta: Int = 60
+
     // Calculator profile inputs
     var sex: BiologicalSex = .male
     var ageYears: Int = 28
@@ -409,6 +414,43 @@ struct NutritionGoals: Codable, Equatable {
     var goalType: NutritionGoalType = .leanBulk
     var proteinPerKg: Double = 2.0
     var fatPerKg: Double = 0.85
+
+    enum CodingKeys: String, CodingKey {
+        case targetCalories, targetProteinGrams, targetCarbsGrams, targetFatGrams
+        case useTrainingDayTargets, trainingDayCaloriesDelta, trainingDayCarbsDelta
+        case sex, ageYears, heightCm, weightKg, activityLevel, goalType, proteinPerKg, fatPerKg
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        targetCalories = try c.decodeIfPresent(Int.self, forKey: .targetCalories) ?? 2500
+        targetProteinGrams = try c.decodeIfPresent(Int.self, forKey: .targetProteinGrams) ?? 160
+        targetCarbsGrams = try c.decodeIfPresent(Int.self, forKey: .targetCarbsGrams) ?? 290
+        targetFatGrams = try c.decodeIfPresent(Int.self, forKey: .targetFatGrams) ?? 75
+        useTrainingDayTargets = try c.decodeIfPresent(Bool.self, forKey: .useTrainingDayTargets) ?? false
+        trainingDayCaloriesDelta = try c.decodeIfPresent(Int.self, forKey: .trainingDayCaloriesDelta) ?? 250
+        trainingDayCarbsDelta = try c.decodeIfPresent(Int.self, forKey: .trainingDayCarbsDelta) ?? 60
+        sex = try c.decodeIfPresent(BiologicalSex.self, forKey: .sex) ?? .male
+        ageYears = try c.decodeIfPresent(Int.self, forKey: .ageYears) ?? 28
+        heightCm = try c.decodeIfPresent(Int.self, forKey: .heightCm) ?? 180
+        weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg) ?? 80.0
+        activityLevel = try c.decodeIfPresent(ActivityLevel.self, forKey: .activityLevel) ?? .moderate
+        goalType = try c.decodeIfPresent(NutritionGoalType.self, forKey: .goalType) ?? .leanBulk
+        proteinPerKg = try c.decodeIfPresent(Double.self, forKey: .proteinPerKg) ?? 2.0
+        fatPerKg = try c.decodeIfPresent(Double.self, forKey: .fatPerKg) ?? 0.85
+    }
+
+    func effectiveCalories(isTrainingDay: Bool) -> Int {
+        guard useTrainingDayTargets && isTrainingDay else { return targetCalories }
+        return max(1200, targetCalories + trainingDayCaloriesDelta)
+    }
+
+    func effectiveCarbs(isTrainingDay: Bool) -> Int {
+        guard useTrainingDayTargets && isTrainingDay else { return targetCarbsGrams }
+        return max(20, targetCarbsGrams + trainingDayCarbsDelta)
+    }
 
     /// Evidence-based Mifflin-St Jeor BMR
     var estimatedBMR: Double {

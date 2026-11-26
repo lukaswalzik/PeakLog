@@ -13,6 +13,9 @@ struct ActiveWorkoutView: View {
     @State private var isShowingDiscardAlert: Bool = false
     @State private var hasLoadedHeader: Bool = false
     @State private var fullscreenPhoto: (image: UIImage, title: String)? = nil
+    @State private var exerciseToReplace: WorkoutExerciseDetail? = nil
+    @State private var setupNoteTarget: WorkoutExerciseDetail? = nil
+    @State private var setupNoteDraft: String = ""
 
     var body: some View {
         NavigationStack {
@@ -40,7 +43,7 @@ struct ActiveWorkoutView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                             } else {
                                 ForEach(detail.exercises) { exerciseDetail in
-                                    exerciseCard(exerciseDetail)
+                                    exerciseCard(exerciseDetail, gymName: detail.gymName)
                                 }
                             }
 
@@ -171,6 +174,14 @@ struct ActiveWorkoutView: View {
                     activeWorkoutManager.addExercises(pickedExercises)
                 }
             }
+            .sheet(item: $exerciseToReplace) { target in
+                ReplaceExerciseSheetView(currentExercise: target.exercise) { newExercise in
+                    activeWorkoutManager.replaceExercise(
+                        workoutExerciseId: target.id,
+                        with: newExercise
+                    )
+                }
+            }
             .sheet(
                 isPresented: Binding(
                     get: { fullscreenPhoto != nil },
@@ -180,6 +191,29 @@ struct ActiveWorkoutView: View {
                 if let photo = fullscreenPhoto {
                     FullscreenImageView(image: photo.image, caption: photo.title)
                 }
+            }
+            .alert(
+                "Setup-Notiz (\(activeWorkoutManager.activeWorkout?.gymName ?? "Allgemein"))",
+                isPresented: Binding(
+                    get: { setupNoteTarget != nil },
+                    set: { if !$0 { setupNoteTarget = nil } }
+                )
+            ) {
+                TextField("z. B. Sitzhöhe 4, Kabelzug Loch 7", text: $setupNoteDraft)
+                Button("Speichern") {
+                    if let target = setupNoteTarget {
+                        activeWorkoutManager.saveSetupNote(
+                            exerciseId: target.exercise.id,
+                            note: setupNoteDraft
+                        )
+                    }
+                    setupNoteTarget = nil
+                }
+                Button("Abbrechen", role: .cancel) {
+                    setupNoteTarget = nil
+                }
+            } message: {
+                Text("Wird dauerhaft für „\(setupNoteTarget?.exercise.name ?? "")“ in diesem Gym gespeichert.")
             }
             .alert("Workout abschließen?", isPresented: $isShowingFinishAlert) {
                 Button("Abschließen", role: .none) {
@@ -288,7 +322,7 @@ struct ActiveWorkoutView: View {
         return palette[abs(group - 1) % palette.count]
     }
 
-    private func exerciseCard(_ exerciseDetail: WorkoutExerciseDetail) -> some View {
+    private func exerciseCard(_ exerciseDetail: WorkoutExerciseDetail, gymName: String?) -> some View {
         let supersetGroup = exerciseDetail.workoutExercise.supersetGroup
         let exercises = activeWorkoutManager.activeWorkout?.exercises ?? []
         let currentIndex = exercises.firstIndex(where: { $0.id == exerciseDetail.id })
@@ -331,6 +365,27 @@ struct ActiveWorkoutView: View {
                 Spacer()
 
                 Menu {
+                    Button {
+                        setupNoteDraft = exerciseDetail.setupNote ?? ""
+                        setupNoteTarget = exerciseDetail
+                    } label: {
+                        Label("Setup-Notiz (\(gymName ?? "Gym"))", systemImage: "pin")
+                    }
+
+                    Button {
+                        activeWorkoutManager.addWarmupSets(for: exerciseDetail)
+                    } label: {
+                        Label("Aufwärmsätze hinzufügen", systemImage: "flame")
+                    }
+
+                    Button {
+                        exerciseToReplace = exerciseDetail
+                    } label: {
+                        Label("Übung ersetzen (besetzt)", systemImage: "arrow.triangle.2.circlepath")
+                    }
+
+                    Divider()
+
                     if hasNextExercise {
                         Button {
                             activeWorkoutManager.linkSupersetWithNext(workoutExerciseId: exerciseDetail.id)
@@ -360,18 +415,69 @@ struct ActiveWorkoutView: View {
             .padding(.horizontal, 12)
             .padding(.top, 12)
 
+            // Gym-specific Setup Note
+            if let note = exerciseDetail.setupNote, !note.isEmpty {
+                Button {
+                    setupNoteDraft = note
+                    setupNoteTarget = exerciseDetail
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                        Text(note)
+                            .font(.caption)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        if let gymName = gymName {
+                            Text(gymName)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.orange.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+            }
+
+            // Double Progression Suggestion
+            if let suggestion = exerciseDetail.progressionSuggestion {
+                HStack(spacing: 6) {
+                    Image(systemName: suggestion.isWeightIncrease ? "arrow.up.right.circle.fill" : "sparkles")
+                        .font(.caption)
+                        .foregroundColor(suggestion.isWeightIncrease ? .green : .blue)
+                    Text(suggestion.message)
+                        .font(.caption)
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background((suggestion.isWeightIncrease ? Color.green : Color.blue).opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 12)
+            }
+
             // Column headers
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Text("Satz")
-                    .frame(width: 32, alignment: .center)
+                    .frame(width: 30, alignment: .center)
                 Text("Vorher")
                     .frame(maxWidth: .infinity, alignment: .center)
                 Text("kg")
-                    .frame(width: 72, alignment: .center)
+                    .frame(width: 64, alignment: .center)
                 Text("Wdh.")
-                    .frame(width: 58, alignment: .center)
+                    .frame(width: 48, alignment: .center)
+                Text("RIR")
+                    .frame(width: 34, alignment: .center)
                 Image(systemName: "checkmark")
-                    .frame(width: 36, alignment: .center)
+                    .frame(width: 32, alignment: .center)
             }
             .font(.caption2)
             .fontWeight(.semibold)

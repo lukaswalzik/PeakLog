@@ -300,6 +300,26 @@ enum Migrations {
             }
         }
 
+        migrator.registerMigration("v10_smart_training") { db in
+            try db.alter(table: "workout_sets") { t in
+                t.add(column: "rir", .integer)
+            }
+
+            try db.create(table: "exercise_gym_notes") { t in
+                t.column("id", .text).primaryKey()
+                t.column("exerciseId", .text).notNull().references("exercises", onDelete: .cascade)
+                t.column("gymId", .text).references("gyms", onDelete: .cascade)
+                t.column("note", .text).notNull()
+                t.column("updatedAt", .datetime).notNull()
+            }
+
+            try db.create(
+                index: "idx_exercise_gym_notes_lookup",
+                on: "exercise_gym_notes",
+                columns: ["exerciseId", "gymId"]
+            )
+        }
+
         return migrator
     }
 }

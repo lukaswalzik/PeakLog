@@ -207,6 +207,8 @@ extension AppDatabase {
             let previousSets: [Int: PreviousSetReference]
             var histBest1RM: Double = 0
             var histBestWeight: Double = 0
+            var setupNote: String? = nil
+            var progressionSuggestion: ProgressionSuggestion? = nil
             if includePreviousSets {
                 previousSets = try fetchPreviousSets(
                     forExerciseId: we.exerciseId,
@@ -221,6 +223,15 @@ extension AppDatabase {
                 )
                 histBest1RM = bests.best1RM
                 histBestWeight = bests.bestWeight
+                setupNote = try fetchExerciseGymNote(
+                    exerciseId: we.exerciseId,
+                    gymId: workout.gymId,
+                    in: db
+                )
+                progressionSuggestion = computeProgressionSuggestion(
+                    for: exercise,
+                    previousSets: previousSets
+                )
             } else {
                 previousSets = [:]
             }
@@ -230,7 +241,9 @@ extension AppDatabase {
                 sets: sets,
                 previousSets: previousSets,
                 historicalBest1RM: histBest1RM,
-                historicalBestWeightKg: histBestWeight
+                historicalBestWeightKg: histBestWeight,
+                setupNote: setupNote,
+                progressionSuggestion: progressionSuggestion
             )
         }
 
@@ -272,6 +285,141 @@ extension AppDatabase {
             if est > best1RM { best1RM = est }
         }
         return (best1RM, bestWeight)
+    }
+
+    private static func fetchExerciseGymNote(
+        exerciseId: String,
+        gymId: String?,
+        in db: Database
+    ) throws -> String? {
+        if let gymId = gymId {
+            if let specific = try ExerciseGymNote
+                .filter(ExerciseGymNote.Columns.exerciseId == exerciseId && ExerciseGymNote.Columns.gymId == gymId)
+                .fetchOne(db) {
+                return specific.note
+            }
+        }
+        if let globalNote = try ExerciseGymNote
+            .filter(ExerciseGymNote.Columns.exerciseId == exerciseId && ExerciseGymNote.Columns.gymId == nil)
+            .fetchOne(db) {
+            return globalNote.note
+        }
+        return nil
+    }
+
+    private static func computeProgressionSuggestion(
+        for exercise: Exercise,
+        previousSets: [Int: PreviousSetReference]
+    ) -> ProgressionSuggestion? {
+        let validSets = previousSets.keys.sorted().compactMap { key -> (weight: Double, reps: Int)? in
+            guard let ref = previousSets[key],
+                  let w = ref.weightKg, let r = ref.reps,
+                  w > 0, r > 0 else { return nil }
+            return (w, r)
+        }
+        guard !validSets.isEmpty else { return nil }
+
+        let topWeight = validSets.map { $0.weight }.max() ?? 0
+        let workingSets = validSets.filter { $0.weight >= topWeight * 0.85 }
+        guard !workingSets.isEmpty else { return nil }
+
+        let minReps = workingSets.map { $0.reps }.min() ?? 0
+        let maxReps = workingSets.map { $0.reps }.max() ?? 0
+        let setCount = workingSets.count
+
+        // Double progression: if all working sets hit >= 10 reps (or >= 12 for isolation/arms), recommend weight increase
+        let isIsolation = exercise.muscleGroup == .biceps || exercise.muscleGroup == .triceps || exercise.muscleGroup == .core
+        let repCeiling = isIsolation ? 12 : 10
+        let stepKg: Double = (exercise.equipment == .dumbbell || isIsolation) ? 2.0 : 2.5
+
+        if minReps >= repCeiling {
+            let nextWeight = topWeight + stepKg
+            return ProgressionSuggestion(
+                message: "Letztes Mal \(setCount)×\(minReps) @ \(Formatters.weight(topWeight)) kg → heute \(Formatters.weight(nextWeight)) kg anpeilen",
+                isWeightIncrease: true
+            )
+        } else {
+            let targetReps = maxReps + 1
+            return ProgressionSuggestion(
+                message: "Letztes Mal \(setCount) Sätze @ \(Formatters.weight(topWeight)) kg → heute \(targetReps) Wdh. versuchen",
+                isWeightIncrease: false
+            )
+        }
+    }
+
+    func saveExerciseGymNote(exerciseId: String, gymId: String?, note: String) throws {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        try dbWriter.write { db in
+            let existing: ExerciseGymNote?
+            if let gymId = gymId {
+                existing = try ExerciseGymNote
+                    .filter(ExerciseGymNote.Columns.exerciseId == exerciseId && ExerciseGymNote.Columns.gymId == gymId)
+                    .fetchOne(db)
+            } else {
+                existing = try ExerciseGymNote
+                    .filter(ExerciseGymNote.Columns.exerciseId == exerciseId && ExerciseGymNote.Columns.gymId == nil)
+                    .fetchOne(db)
+            }
+
+            if trimmed.isEmpty {
+                if let existing = existing {
+                    _ = try ExerciseGymNote.deleteOne(db, key: existing.id)
+                }
+            } else if var existing = existing {
+                existing.note = trimmed
+                existing.updatedAt = Date()
+                try existing.update(db)
+            } else {
+                let fresh = ExerciseGymNote(exerciseId: exerciseId, gymId: gymId, note: trimmed)
+                try fresh.insert(db)
+            }
+        }
+    }
+
+    func replaceWorkoutExercise(workoutExerciseId: String, newExercise: Exercise) throws {
+        try dbWriter.write { db in
+            guard var we = try WorkoutExercise.fetchOne(db, key: workoutExerciseId) else { return }
+            we.exerciseId = newExercise.id
+            we.restSeconds = newExercise.defaultRestSeconds
+            try we.update(db)
+        }
+    }
+
+    func insertWarmupSets(for workoutExerciseId: String, workingWeightKg: Double) throws {
+        guard workingWeightKg > 0 else { return }
+        let roundTo2_5: (Double) -> Double = { val in
+            max(2.5, (val / 2.5).rounded() * 2.5)
+        }
+        let warmups: [(Double, Int)] = workingWeightKg >= 40
+            ? [(roundTo2_5(workingWeightKg * 0.5), 8), (roundTo2_5(workingWeightKg * 0.72), 5), (roundTo2_5(workingWeightKg * 0.85), 2)]
+            : [(roundTo2_5(workingWeightKg * 0.55), 8), (roundTo2_5(workingWeightKg * 0.75), 4)]
+
+        try dbWriter.write { db in
+            let existingSets = try WorkoutSet
+                .filter(WorkoutSet.Columns.workoutExerciseId == workoutExerciseId)
+                .order(WorkoutSet.Columns.setOrder.asc)
+                .fetchAll(db)
+
+            let offset = warmups.count
+            for set in existingSets {
+                try db.execute(
+                    sql: "UPDATE workout_sets SET setOrder = ? WHERE id = ?",
+                    arguments: [set.setOrder + offset, set.id]
+                )
+            }
+
+            for (idx, item) in warmups.enumerated() {
+                let warmupSet = WorkoutSet(
+                    workoutExerciseId: workoutExerciseId,
+                    setOrder: idx + 1,
+                    setType: .warmup,
+                    weightKg: item.0,
+                    reps: item.1,
+                    isCompleted: false
+                )
+                try warmupSet.insert(db)
+            }
+        }
     }
 
     private static func fetchPreviousSets(
@@ -773,7 +921,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 7,
+                schemaVersion: 8,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -793,7 +941,8 @@ extension AppDatabase {
                 supplements: try Supplement.fetchAll(db),
                 supplementLogs: try SupplementLog.fetchAll(db),
                 bodyMeasurements: try BodyMeasurement.fetchAll(db),
-                readinessLogs: try ReadinessLog.fetchAll(db)
+                readinessLogs: try ReadinessLog.fetchAll(db),
+                exerciseGymNotes: try ExerciseGymNote.fetchAll(db)
             )
         }
     }
@@ -801,6 +950,7 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try ExerciseGymNote.deleteAll(db)
             try ReadinessLog.deleteAll(db)
             try BodyMeasurement.deleteAll(db)
             try SupplementLog.deleteAll(db)
@@ -845,6 +995,7 @@ extension AppDatabase {
             for item in payload.supplementLogs ?? [] { try item.insert(db) }
             for item in payload.bodyMeasurements ?? [] { try item.insert(db) }
             for item in payload.readinessLogs ?? [] { try item.insert(db) }
+            for item in payload.exerciseGymNotes ?? [] { try item.insert(db) }
         }
     }
 }

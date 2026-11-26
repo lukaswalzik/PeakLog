@@ -167,6 +167,45 @@ struct NutritionGoalsView: View {
                         }
                     }
                 }
+
+                Section(
+                    header: Text("Trainingstag vs. Ruhetag"),
+                    footer: Text("Wenn aktiviert, erkennt StrongTracker automatisch deine Trainingstage (Kraft oder Cardio) und passt Kalorien & Kohlenhydrate an. Du kannst den Tag im Ernährungs-Tab auch jederzeit per 1 Tap umschalten.")
+                ) {
+                    Toggle("Extra-Ziele an Trainingstagen", isOn: $draft.useTrainingDayTargets)
+
+                    if draft.useTrainingDayTargets {
+                        Stepper(value: $draft.trainingDayCaloriesDelta, in: -400...1000, step: 50) {
+                            HStack {
+                                Text("Trainingstag Kalorien")
+                                Spacer()
+                                Text("\(draft.trainingDayCaloriesDelta >= 0 ? "+" : "")\(draft.trainingDayCaloriesDelta) kcal")
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.green)
+                            }
+                        }
+
+                        Stepper(value: $draft.trainingDayCarbsDelta, in: -100...250, step: 10) {
+                            HStack {
+                                Text("Trainingstag Carbs")
+                                Spacer()
+                                Text("\(draft.trainingDayCarbsDelta >= 0 ? "+" : "")\(draft.trainingDayCarbsDelta) g")
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+
+                        HStack {
+                            Text("Trainingstag gesamt")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(draft.effectiveCalories(isTrainingDay: true)) kcal · \(draft.effectiveCarbs(isTrainingDay: true))g KH")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                    }
+                }
             }
             .navigationTitle("Ziele & Kalorienrechner")
             .navigationBarTitleDisplayMode(.inline)

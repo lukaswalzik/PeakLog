@@ -188,7 +188,12 @@ struct ProgressDashboardView: View {
                 .pickerStyle(.segmented)
 
                 trendSummaryRow
+                MuscleHeatmapView(workouts: historyStore.completedWorkouts)
                 weeklyMuscleVolumeCard
+                StrengthStandardsCardView(
+                    workouts: historyStore.completedWorkouts,
+                    bodyweightKg: bodyweightStore.latestEntry?.entry.weightKg ?? 90.0
+                )
                 strengthChartCard
                 bodyweightChartCard
                 topGainsSection

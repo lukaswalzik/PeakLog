@@ -132,8 +132,13 @@ struct WorkoutSet: Identifiable, Equatable, Hashable, Codable, FetchableRecord, 
     var setType: SetType
     var weightKg: Double?
     var reps: Int?
+    var rir: Int?
     var isCompleted: Bool
     var completedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, workoutExerciseId, setOrder, setType, weightKg, reps, rir, isCompleted, completedAt
+    }
 
     enum Columns {
         static let id = Column(CodingKeys.id)
@@ -142,6 +147,7 @@ struct WorkoutSet: Identifiable, Equatable, Hashable, Codable, FetchableRecord, 
         static let setType = Column(CodingKeys.setType)
         static let weightKg = Column(CodingKeys.weightKg)
         static let reps = Column(CodingKeys.reps)
+        static let rir = Column(CodingKeys.rir)
         static let isCompleted = Column(CodingKeys.isCompleted)
         static let completedAt = Column(CodingKeys.completedAt)
     }
@@ -153,6 +159,7 @@ struct WorkoutSet: Identifiable, Equatable, Hashable, Codable, FetchableRecord, 
         setType: SetType = .normal,
         weightKg: Double? = nil,
         reps: Int? = nil,
+        rir: Int? = nil,
         isCompleted: Bool = false,
         completedAt: Date? = nil
     ) {
@@ -162,9 +169,60 @@ struct WorkoutSet: Identifiable, Equatable, Hashable, Codable, FetchableRecord, 
         self.setType = setType
         self.weightKg = weightKg
         self.reps = reps
+        self.rir = rir
         self.isCompleted = isCompleted
         self.completedAt = completedAt
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        workoutExerciseId = try c.decode(String.self, forKey: .workoutExerciseId)
+        setOrder = try c.decode(Int.self, forKey: .setOrder)
+        setType = try c.decodeIfPresent(SetType.self, forKey: .setType) ?? .normal
+        weightKg = try c.decodeIfPresent(Double.self, forKey: .weightKg)
+        reps = try c.decodeIfPresent(Int.self, forKey: .reps)
+        rir = try c.decodeIfPresent(Int.self, forKey: .rir)
+        isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+    }
+}
+
+struct ExerciseGymNote: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "exercise_gym_notes"
+
+    var id: String
+    var exerciseId: String
+    var gymId: String?
+    var note: String
+    var updatedAt: Date
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let exerciseId = Column(CodingKeys.exerciseId)
+        static let gymId = Column(CodingKeys.gymId)
+        static let note = Column(CodingKeys.note)
+        static let updatedAt = Column(CodingKeys.updatedAt)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        exerciseId: String,
+        gymId: String? = nil,
+        note: String,
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.exerciseId = exerciseId
+        self.gymId = gymId
+        self.note = note
+        self.updatedAt = updatedAt
+    }
+}
+
+struct ProgressionSuggestion: Equatable, Hashable {
+    var message: String
+    var isWeightIncrease: Bool
 }
 
 struct PreviousSetReference: Equatable, Hashable {
@@ -179,6 +237,8 @@ struct WorkoutExerciseDetail: Identifiable, Equatable, Hashable {
     var previousSets: [Int: PreviousSetReference]
     var historicalBest1RM: Double = 0
     var historicalBestWeightKg: Double = 0
+    var setupNote: String? = nil
+    var progressionSuggestion: ProgressionSuggestion? = nil
 
     var id: String { workoutExercise.id }
 
@@ -223,4 +283,16 @@ struct WorkoutDetail: Identifiable, Equatable, Hashable {
             }
         }
     }
+}
+
+struct CompletedWorkoutRecap: Identifiable, Equatable {
+    let id: String
+    let workoutName: String
+    let gymName: String?
+    let finishedAt: Date
+    let durationSeconds: Int
+    let exerciseCount: Int
+    let completedSets: Int
+    let totalVolumeKg: Double
+    let prDescriptions: [String]
 }

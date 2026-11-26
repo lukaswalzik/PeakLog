@@ -64,7 +64,7 @@ struct WorkoutSetRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Menu {
                 ForEach(SetType.allCases) { type in
                     Button {
@@ -91,7 +91,7 @@ struct WorkoutSetRowView: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(setBadgeColor)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 30, height: 32)
                     .background(Color(uiColor: .tertiarySystemFill))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
@@ -114,7 +114,7 @@ struct WorkoutSetRowView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
@@ -125,10 +125,10 @@ struct WorkoutSetRowView: View {
                 .fontWeight(.medium)
                 .focused($focusedField, equals: .weight)
                 .padding(.vertical, 6)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 4)
                 .background(Color(uiColor: .tertiarySystemFill))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .frame(width: 72)
+                .frame(width: 64)
                 .onChange(of: weightText) { newValue in
                     let parsed = Formatters.parseWeight(newValue)
                     if parsed != set.weightKg {
@@ -145,10 +145,10 @@ struct WorkoutSetRowView: View {
                 .fontWeight(.medium)
                 .focused($focusedField, equals: .reps)
                 .padding(.vertical, 6)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 4)
                 .background(Color(uiColor: .tertiarySystemFill))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .frame(width: 58)
+                .frame(width: 48)
                 .onChange(of: repsText) { newValue in
                     let digitsOnly = newValue.filter { $0.isNumber }
                     let parsed = Int(digitsOnly)
@@ -159,6 +159,26 @@ struct WorkoutSetRowView: View {
                     }
                 }
 
+            Menu {
+                Button("RIR 0 (Muskelversagen)") { updateRIR(0) }
+                Button("RIR 1 (1 Wdh. Reserve)") { updateRIR(1) }
+                Button("RIR 2 (Optimal Hypertrophie)") { updateRIR(2) }
+                Button("RIR 3 (Moderat)") { updateRIR(3) }
+                Button("RIR 4+ (Leicht)") { updateRIR(4) }
+                if set.rir != nil {
+                    Divider()
+                    Button("RIR entfernen", role: .destructive) { updateRIR(nil) }
+                }
+            } label: {
+                Text(set.rir.map { "R\($0)" } ?? "–")
+                    .font(.caption)
+                    .fontWeight(set.rir != nil ? .bold : .regular)
+                    .foregroundColor(rirColor(set.rir))
+                    .frame(width: 34, height: 32)
+                    .background(rirBackground(set.rir))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             Button {
                 focusedField = nil
                 let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -168,7 +188,7 @@ struct WorkoutSetRowView: View {
                 Image(systemName: set.isCompleted ? "checkmark.square.fill" : "checkmark.square")
                     .font(.title2)
                     .foregroundColor(set.isCompleted ? .green : .secondary.opacity(0.6))
-                    .frame(width: 36, height: 32)
+                    .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(set.isCompleted ? "Satz abgeschlossen" : "Satz abhaken")
@@ -196,5 +216,26 @@ struct WorkoutSetRowView: View {
                 repsText = formatted
             }
         }
+    }
+
+    private func updateRIR(_ value: Int?) {
+        var updated = set
+        updated.rir = value
+        onUpdate(updated)
+    }
+
+    private func rirColor(_ rir: Int?) -> Color {
+        guard let rir = rir else { return .secondary }
+        switch rir {
+        case 0: return .red
+        case 1: return .orange
+        case 2: return .green
+        default: return .blue
+        }
+    }
+
+    private func rirBackground(_ rir: Int?) -> Color {
+        guard let rir = rir else { return Color(uiColor: .tertiarySystemFill) }
+        return rirColor(rir).opacity(0.16)
     }
 }

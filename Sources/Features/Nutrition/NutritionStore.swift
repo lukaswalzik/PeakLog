@@ -13,6 +13,8 @@ final class NutritionStore: ObservableObject {
     @Published private(set) var savedMeals: [SavedMealWithItems] = []
     @Published private(set) var dayEntries: [FoodLogEntryDetail] = []
     @Published private(set) var weeklyPoints: [DailyNutritionPoint] = []
+    @Published private(set) var monthlyPoints: [DailyNutritionPoint] = []
+    @Published var manualTrainingDayOverrides: [String: Bool] = [:]
     @Published var goals: NutritionGoals {
         didSet {
             persistGoals()
@@ -25,6 +27,7 @@ final class NutritionStore: ObservableObject {
     private var mealsCancellable: AnyDatabaseCancellable?
     private var dayCancellable: AnyDatabaseCancellable?
     private var weeklyCancellable: AnyDatabaseCancellable?
+    private var monthlyCancellable: AnyDatabaseCancellable?
 
     init(database: AppDatabase) {
         self.database = database
@@ -40,6 +43,20 @@ final class NutritionStore: ObservableObject {
         startSavedMealsObservation()
         startDayObservation(for: selectedDate)
         startWeeklyObservation()
+        startMonthlyObservation()
+    }
+
+    func isTrainingDay(date: Date, autoDetected: Bool) -> Bool {
+        let key = WellnessDateKey.key(for: date)
+        if let override = manualTrainingDayOverrides[key] {
+            return override
+        }
+        return autoDetected
+    }
+
+    func toggleTrainingDayOverride(for date: Date, currentValue: Bool) {
+        let key = WellnessDateKey.key(for: date)
+        manualTrainingDayOverrides[key] = !currentValue
     }
 
     var dayTotals: DailyNutritionTotals {
@@ -145,6 +162,21 @@ final class NutritionStore: ObservableObject {
             onError: { _ in },
             onChange: { [weak self] points in
                 self?.weeklyPoints = points
+            }
+        )
+    }
+
+    private func startMonthlyObservation() {
+        let observation = ValueObservation.tracking { db in
+            try AppDatabase.fetchDailyNutritionPoints(days: 28, in: db)
+        }
+
+        monthlyCancellable = observation.start(
+            in: database.dbWriter,
+            scheduling: .async(onQueue: .main),
+            onError: { _ in },
+            onChange: { [weak self] points in
+                self?.monthlyPoints = points
             }
         )
     }

@@ -4,6 +4,7 @@ import GRDB
 final class ActiveWorkoutManager: ObservableObject {
     @Published private(set) var activeWorkout: WorkoutDetail?
     @Published var isPresentingSheet: Bool = false
+    @Published var lastCompletedRecap: CompletedWorkoutRecap? = nil
     @Published var errorMessage: String?
 
     /// Hook invoked when a set transitions from incomplete -> completed, passing the exercise's restSeconds.
@@ -171,6 +172,36 @@ final class ActiveWorkoutManager: ObservableObject {
         }
     }
 
+    func saveSetupNote(exerciseId: String, note: String) {
+        let gymId = activeWorkout?.workout.gymId
+        do {
+            try database.saveExerciseGymNote(exerciseId: exerciseId, gymId: gymId, note: note)
+        } catch {
+            errorMessage = "Setup-Notiz konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    func replaceExercise(workoutExerciseId: String, with newExercise: Exercise) {
+        do {
+            try database.replaceWorkoutExercise(workoutExerciseId: workoutExerciseId, newExercise: newExercise)
+        } catch {
+            errorMessage = "Übung konnte nicht ersetzt werden: \(error.localizedDescription)"
+        }
+    }
+
+    func addWarmupSets(for exerciseDetail: WorkoutExerciseDetail) {
+        // Determine working weight from first non-warmup set, or from previous session's top set
+        let workingWeight: Double = exerciseDetail.sets
+            .first(where: { $0.setType != .warmup && ($0.weightKg ?? 0) > 0 })?.weightKg
+            ?? exerciseDetail.previousSets.values.compactMap { $0.weightKg }.max()
+            ?? 40.0
+        do {
+            try database.insertWarmupSets(for: exerciseDetail.id, workingWeightKg: workingWeight)
+        } catch {
+            errorMessage = "Aufwärmsätze konnten nicht erstellt werden: \(error.localizedDescription)"
+        }
+    }
+
     func deleteSet(id: String, workoutExerciseId: String) {
         do {
             try database.deleteSet(id: id, workoutExerciseId: workoutExerciseId)
@@ -194,10 +225,42 @@ final class ActiveWorkoutManager: ObservableObject {
     }
 
     func finishWorkout(updateRoutine: Bool = false) {
-        guard let workoutId = activeWorkout?.workout.id else { return }
+        guard let detail = activeWorkout else { return }
+        let workoutId = detail.workout.id
+
+        // Snapshot recap before finishing
+        let finishedAt = Date()
+        let durationSeconds = max(60, Int(finishedAt.timeIntervalSince(detail.workout.startedAt)))
+        var prDescriptions: [String] = []
+        for ex in detail.exercises {
+            let prSets = ex.sets.filter { ex.isLivePR($0) }
+            if let bestPR = prSets.max(by: {
+                OneRepMaxCalculator.estimatedOneRepMax(weightKg: $0.weightKg ?? 0, reps: $0.reps ?? 0) <
+                OneRepMaxCalculator.estimatedOneRepMax(weightKg: $1.weightKg ?? 0, reps: $1.reps ?? 0)
+            }), let w = bestPR.weightKg, let r = bestPR.reps {
+                prDescriptions.append("\(ex.exercise.name): \(Formatters.weight(w)) kg × \(r)")
+            }
+        }
+        let recap = CompletedWorkoutRecap(
+            id: workoutId,
+            workoutName: detail.workout.name,
+            gymName: detail.gymName,
+            finishedAt: finishedAt,
+            durationSeconds: durationSeconds,
+            exerciseCount: detail.exercises.count,
+            completedSets: detail.completedSetCount,
+            totalVolumeKg: detail.totalVolumeKg,
+            prDescriptions: prDescriptions
+        )
+
         do {
             try database.finishWorkout(id: workoutId, updateRoutine: updateRoutine)
             isPresentingSheet = false
+            if recap.completedSets > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    self.lastCompletedRecap = recap
+                }
+            }
         } catch {
             errorMessage = "Workout konnte nicht abgeschlossen werden: \(error.localizedDescription)"
         }

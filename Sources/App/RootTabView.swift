@@ -67,6 +67,9 @@ struct RootTabView: View {
         .sheet(isPresented: $activeWorkoutManager.isPresentingSheet) {
             ActiveWorkoutView()
         }
+        .sheet(item: $activeWorkoutManager.lastCompletedRecap) { recap in
+            WorkoutRecapSheetView(recap: recap)
+        }
         .onChange(of: activeWorkoutManager.hasActiveWorkout) { isActive in
             if !isActive {
                 restTimerManager.skip()
