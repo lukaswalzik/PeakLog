@@ -46,8 +46,15 @@ final class NutritionStore: ObservableObject {
         startMonthlyObservation()
     }
 
+    private static let dayKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     func isTrainingDay(date: Date, autoDetected: Bool) -> Bool {
-        let key = WellnessDateKey.key(for: date)
+        let key = Self.dayKeyFormatter.string(from: date)
         if let override = manualTrainingDayOverrides[key] {
             return override
         }
@@ -55,7 +62,7 @@ final class NutritionStore: ObservableObject {
     }
 
     func toggleTrainingDayOverride(for date: Date, currentValue: Bool) {
-        let key = WellnessDateKey.key(for: date)
+        let key = Self.dayKeyFormatter.string(from: date)
         manualTrainingDayOverrides[key] = !currentValue
     }
 
