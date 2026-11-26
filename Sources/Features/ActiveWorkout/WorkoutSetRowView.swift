@@ -34,7 +34,7 @@ struct WorkoutSetRowView: View {
     }
 
     private var setBadgeText: String {
-        set.setType.shortBadge ?? "\(set.setOrder)"
+        self.set.setType.shortBadge ?? "\(self.set.setOrder)"
     }
 
     private var setBadgeColor: Color {
