@@ -22,19 +22,12 @@ struct RootTabView: View {
                     }
                     .tag(Tab.start)
 
-                NavigationStack {
-                    EmptyStateView(
-                        systemImage: "clock.arrow.circlepath",
-                        title: "Trainingsverlauf",
-                        message: "Abgeschlossene Workouts erscheinen hier ab Phase 5."
-                    )
-                    .navigationTitle("Verlauf")
-                }
-                .toolbarBackground(.visible, for: .tabBar)
-                .tabItem {
-                    Label("Verlauf", systemImage: "clock.arrow.circlepath")
-                }
-                .tag(Tab.history)
+                HistoryListView()
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .tabItem {
+                        Label("Verlauf", systemImage: "clock.arrow.circlepath")
+                    }
+                    .tag(Tab.history)
 
                 ExerciseListView()
                     .toolbarBackground(.visible, for: .tabBar)
@@ -43,19 +36,12 @@ struct RootTabView: View {
                     }
                     .tag(Tab.exercises)
 
-                NavigationStack {
-                    EmptyStateView(
-                        systemImage: "person.crop.circle",
-                        title: "Profil & Backup",
-                        message: "PR-Übersicht und lokaler JSON-Export/Import folgen in Phase 5."
-                    )
-                    .navigationTitle("Profil")
-                }
-                .toolbarBackground(.visible, for: .tabBar)
-                .tabItem {
-                    Label("Profil", systemImage: "person.crop.circle")
-                }
-                .tag(Tab.profile)
+                ProfileBackupView()
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .tabItem {
+                        Label("Profil", systemImage: "person.crop.circle")
+                    }
+                    .tag(Tab.profile)
             }
 
             if let detail = activeWorkoutManager.activeWorkout, !activeWorkoutManager.isPresentingSheet {
@@ -155,5 +141,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(RoutineStore(database: db))
             .environmentObject(ActiveWorkoutManager(database: db))
             .environmentObject(RestTimerManager())
+            .environmentObject(HistoryStore(database: db))
     }
 }

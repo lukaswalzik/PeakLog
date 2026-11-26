@@ -59,4 +59,27 @@ enum Formatters {
             return "–"
         }
     }
+
+    private static let workoutDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "de_DE")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "de_DE")
+        formatter.dateFormat = "dd.MM.yy"
+        return formatter
+    }()
+
+    static func workoutDate(_ date: Date) -> String {
+        workoutDateFormatter.string(from: date)
+    }
+
+    static func shortDate(_ date: Date) -> String {
+        shortDateFormatter.string(from: date)
+    }
 }

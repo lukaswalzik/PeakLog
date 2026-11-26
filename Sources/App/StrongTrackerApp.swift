@@ -7,6 +7,7 @@ struct StrongTrackerApp: App {
     @StateObject private var routineStore: RoutineStore
     @StateObject private var activeWorkoutManager: ActiveWorkoutManager
     @StateObject private var restTimerManager: RestTimerManager
+    @StateObject private var historyStore: HistoryStore
 
     init() {
         let db = AppDatabase.shared
@@ -20,6 +21,7 @@ struct StrongTrackerApp: App {
         _routineStore = StateObject(wrappedValue: RoutineStore(database: db))
         _activeWorkoutManager = StateObject(wrappedValue: workoutManager)
         _restTimerManager = StateObject(wrappedValue: timerManager)
+        _historyStore = StateObject(wrappedValue: HistoryStore(database: db))
 
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
@@ -34,6 +36,7 @@ struct StrongTrackerApp: App {
                 .environmentObject(routineStore)
                 .environmentObject(activeWorkoutManager)
                 .environmentObject(restTimerManager)
+                .environmentObject(historyStore)
         }
     }
 }

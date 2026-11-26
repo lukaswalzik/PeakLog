@@ -37,12 +37,11 @@ struct ExerciseListView: View {
                 } else {
                     List {
                         ForEach(filteredExercises) { exercise in
-                            Button {
-                                editingExercise = exercise
+                            NavigationLink {
+                                ExerciseDetailView(exercise: exercise)
                             } label: {
                                 ExerciseRowView(exercise: exercise)
                             }
-                            .buttonStyle(.plain)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     exerciseStore.archiveOrDelete(exercise)

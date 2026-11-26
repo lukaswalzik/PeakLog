@@ -448,3 +448,213 @@ extension AppDatabase {
         }
     }
 }
+
+// MARK: - History, Stats & Backup Operations
+
+extension AppDatabase {
+    static func fetchCompletedWorkouts(in db: Database) throws -> [WorkoutDetail] {
+        let completed = try Workout
+            .filter(Workout.Columns.finishedAt != nil)
+            .order(Workout.Columns.startedAt.desc)
+            .fetchAll(db)
+
+        return try completed.map { workout in
+            try fetchWorkoutDetail(for: workout, includePreviousSets: false, in: db)
+        }
+    }
+
+    func deleteWorkout(id: String) throws {
+        try dbWriter.write { db in
+            _ = try Workout.deleteOne(db, key: id)
+        }
+    }
+
+    static func fetchExerciseStats(exerciseId: String, in db: Database) throws -> ExerciseStats {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT we.id AS weId, w.id AS workoutId, w.name AS workoutName, w.startedAt AS startedAt
+                FROM workout_exercises we
+                JOIN workouts w ON w.id = we.workoutId
+                WHERE we.exerciseId = ?
+                  AND w.finishedAt IS NOT NULL
+                ORDER BY w.startedAt ASC
+                """,
+            arguments: [exerciseId]
+        )
+
+        guard !rows.isEmpty else { return .empty }
+
+        let weIds: [String] = rows.map { $0["weId"] }
+        let allSets = try WorkoutSet
+            .filter(weIds.contains(WorkoutSet.Columns.workoutExerciseId) && WorkoutSet.Columns.isCompleted == true)
+            .order(WorkoutSet.Columns.setOrder.asc)
+            .fetchAll(db)
+        let setsByWeId = Dictionary(grouping: allSets, by: { $0.workoutExerciseId })
+
+        var overallBestWeight: Double?
+        var overallBest1RM: Double?
+        var overallBestSetVolume: Double?
+        var totalCompletedSets = 0
+        var historyPoints: [ExerciseProgressPoint] = []
+
+        for row in rows {
+            let weId: String = row["weId"]
+            let workoutId: String = row["workoutId"]
+            let workoutName: String = row["workoutName"]
+            let startedAt: Date = row["startedAt"]
+
+            let sets = setsByWeId[weId] ?? []
+            guard !sets.isEmpty else { continue }
+            totalCompletedSets += sets.count
+
+            let workingSets = sets.filter { $0.setType != .warmup }
+            let evaluatedSets = workingSets.isEmpty ? sets : workingSets
+
+            var sessionBest1RM: Double = 0
+            var sessionBestWeight: Double = 0
+            var sessionVolume: Double = 0
+
+            for set in evaluatedSets {
+                let w = set.weightKg ?? 0
+                let r = set.reps ?? 0
+                let est1RM = OneRepMaxCalculator.estimatedOneRepMax(weightKg: w, reps: r)
+                let vol = OneRepMaxCalculator.setVolume(weightKg: set.weightKg, reps: set.reps)
+
+                if w > sessionBestWeight { sessionBestWeight = w }
+                if est1RM > sessionBest1RM { sessionBest1RM = est1RM }
+                sessionVolume += vol
+
+                if w > 0 {
+                    overallBestWeight = max(overallBestWeight ?? 0, w)
+                }
+                if est1RM > 0 {
+                    overallBest1RM = max(overallBest1RM ?? 0, est1RM)
+                }
+                if vol > 0 {
+                    overallBestSetVolume = max(overallBestSetVolume ?? 0, vol)
+                }
+            }
+
+            historyPoints.append(
+                ExerciseProgressPoint(
+                    id: workoutId,
+                    date: startedAt,
+                    workoutName: workoutName,
+                    bestEstimated1RM: sessionBest1RM,
+                    bestWeightKg: sessionBestWeight,
+                    totalVolumeKg: sessionVolume,
+                    sets: sets
+                )
+            )
+        }
+
+        return ExerciseStats(
+            bestWeightKg: overallBestWeight,
+            bestEstimated1RM: overallBest1RM,
+            bestSetVolumeKg: overallBestSetVolume,
+            totalCompletedSets: totalCompletedSets,
+            history: historyPoints
+        )
+    }
+
+    static func fetchAllExercisePRs(in db: Database) throws -> [ExercisePRSummary] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT we.exerciseId AS exerciseId,
+                       ws.weightKg AS weightKg,
+                       ws.reps AS reps,
+                       ws.setType AS setType,
+                       w.startedAt AS startedAt
+                FROM workout_sets ws
+                JOIN workout_exercises we ON we.id = ws.workoutExerciseId
+                JOIN workouts w ON w.id = we.workoutId
+                WHERE w.finishedAt IS NOT NULL
+                  AND ws.isCompleted = 1
+                  AND ws.weightKg IS NOT NULL
+                  AND ws.weightKg > 0
+                  AND ws.reps IS NOT NULL
+                  AND ws.reps > 0
+                  AND ws.setType != 'warmup'
+                """
+        )
+
+        guard !rows.isEmpty else { return [] }
+
+        var bestByExercise: [String: (est1RM: Double, weight: Double, date: Date)] = [:]
+        for row in rows {
+            let exerciseId: String = row["exerciseId"]
+            let weight: Double = row["weightKg"]
+            let reps: Int = row["reps"]
+            let startedAt: Date = row["startedAt"]
+
+            let est1RM = OneRepMaxCalculator.estimatedOneRepMax(weightKg: weight, reps: reps)
+            if let current = bestByExercise[exerciseId] {
+                let newBest1RM = max(current.est1RM, est1RM)
+                let newBestWeight = max(current.weight, weight)
+                let newDate = est1RM >= current.est1RM ? startedAt : current.date
+                bestByExercise[exerciseId] = (newBest1RM, newBestWeight, newDate)
+            } else {
+                bestByExercise[exerciseId] = (est1RM, weight, startedAt)
+            }
+        }
+
+        let exerciseIds = Set(bestByExercise.keys)
+        let exercises = try Exercise
+            .filter(exerciseIds.contains(Exercise.Columns.id))
+            .fetchAll(db)
+        let exercisesById = Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+
+        return bestByExercise.compactMap { exerciseId, stats -> ExercisePRSummary? in
+            guard let exercise = exercisesById[exerciseId] else { return nil }
+            return ExercisePRSummary(
+                exercise: exercise,
+                bestEstimated1RM: stats.est1RM,
+                bestWeightKg: stats.weight,
+                achievedAt: stats.date
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.bestEstimated1RM != rhs.bestEstimated1RM {
+                return lhs.bestEstimated1RM > rhs.bestEstimated1RM
+            }
+            return lhs.exercise.name < rhs.exercise.name
+        }
+    }
+
+    func exportBackupPayload() throws -> BackupPayload {
+        try dbWriter.read { db in
+            BackupPayload(
+                schemaVersion: 1,
+                exportedAt: Date(),
+                exercises: try Exercise.fetchAll(db),
+                routines: try Routine.fetchAll(db),
+                routineExercises: try RoutineExercise.fetchAll(db),
+                workouts: try Workout.fetchAll(db),
+                workoutExercises: try WorkoutExercise.fetchAll(db),
+                workoutSets: try WorkoutSet.fetchAll(db)
+            )
+        }
+    }
+
+    func importBackupPayload(_ payload: BackupPayload) throws {
+        try dbWriter.write { db in
+            // Delete in reverse foreign-key dependency order
+            try WorkoutSet.deleteAll(db)
+            try WorkoutExercise.deleteAll(db)
+            try Workout.deleteAll(db)
+            try RoutineExercise.deleteAll(db)
+            try Routine.deleteAll(db)
+            try Exercise.deleteAll(db)
+
+            // Insert in foreign-key dependency order
+            for item in payload.exercises { try item.insert(db) }
+            for item in payload.routines { try item.insert(db) }
+            for item in payload.routineExercises { try item.insert(db) }
+            for item in payload.workouts { try item.insert(db) }
+            for item in payload.workoutExercises { try item.insert(db) }
+            for item in payload.workoutSets { try item.insert(db) }
+        }
+    }
+}
