@@ -547,11 +547,12 @@ final class OuraService: NSObject, ObservableObject, ASWebAuthenticationPresenta
     private func formEncoded(_ pairs: [(String, String)]) -> Data? {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "&+=?")
-        let str = pairs.map { key, val in
+        let parts: [String] = pairs.map { key, val in
             let k = key.addingPercentEncoding(withAllowedCharacters: allowed) ?? key
             let v = val.addingPercentEncoding(withAllowedCharacters: allowed) ?? val
             return "\(k)=\(v)"
-        }.joined(separator: "&")
+        }
+        let str: String = parts.joined(separator: "&")
         return str.data(using: .utf8)
     }
 
