@@ -773,7 +773,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 6,
+                schemaVersion: 7,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -788,7 +788,12 @@ extension AppDatabase {
                 foodItems: try FoodItem.fetchAll(db),
                 foodLogEntries: try FoodLogEntry.fetchAll(db),
                 savedMeals: try SavedMeal.fetchAll(db),
-                savedMealItems: try SavedMealItem.fetchAll(db)
+                savedMealItems: try SavedMealItem.fetchAll(db),
+                dailyWaterLogs: try DailyWaterLog.fetchAll(db),
+                supplements: try Supplement.fetchAll(db),
+                supplementLogs: try SupplementLog.fetchAll(db),
+                bodyMeasurements: try BodyMeasurement.fetchAll(db),
+                readinessLogs: try ReadinessLog.fetchAll(db)
             )
         }
     }
@@ -796,6 +801,11 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try ReadinessLog.deleteAll(db)
+            try BodyMeasurement.deleteAll(db)
+            try SupplementLog.deleteAll(db)
+            try Supplement.deleteAll(db)
+            try DailyWaterLog.deleteAll(db)
             try SavedMealItem.deleteAll(db)
             try SavedMeal.deleteAll(db)
             try FoodLogEntry.deleteAll(db)
@@ -830,6 +840,11 @@ extension AppDatabase {
             for item in payload.foodLogEntries ?? [] { try item.insert(db) }
             for item in payload.savedMeals ?? [] { try item.insert(db) }
             for item in payload.savedMealItems ?? [] { try item.insert(db) }
+            for item in payload.dailyWaterLogs ?? [] { try item.insert(db) }
+            for item in payload.supplements ?? [] { try item.insert(db) }
+            for item in payload.supplementLogs ?? [] { try item.insert(db) }
+            for item in payload.bodyMeasurements ?? [] { try item.insert(db) }
+            for item in payload.readinessLogs ?? [] { try item.insert(db) }
         }
     }
 }
@@ -1077,6 +1092,168 @@ extension AppDatabase {
                 )
                 try entry.insert(db)
             }
+        }
+    }
+
+    func copyMealFromPreviousDay(mealType: MealType, toDay targetDay: Date) throws -> Int {
+        let cal = Calendar.current
+        guard let prevDay = cal.date(byAdding: .day, value: -1, to: targetDay) else { return 0 }
+        let prevStart = cal.startOfDay(for: prevDay)
+        guard let prevEnd = cal.date(byAdding: .day, value: 1, to: prevStart) else { return 0 }
+
+        return try dbWriter.write { db in
+            let prevEntries = try FoodLogEntry
+                .filter(
+                    FoodLogEntry.Columns.mealType == mealType
+                    && FoodLogEntry.Columns.loggedAt >= prevStart
+                    && FoodLogEntry.Columns.loggedAt < prevEnd
+                )
+                .fetchAll(db)
+
+            for item in prevEntries {
+                let copy = FoodLogEntry(
+                    foodItemId: item.foodItemId,
+                    loggedAt: targetDay,
+                    mealType: mealType,
+                    grams: item.grams
+                )
+                try copy.insert(db)
+            }
+            return prevEntries.count
+        }
+    }
+
+    static func fetchDailyNutritionPoints(days: Int = 7, in db: Database) throws -> [DailyNutritionPoint] {
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: Date())
+        guard let startDate = cal.date(byAdding: .day, value: -(days - 1), to: todayStart),
+              let endDate = cal.date(byAdding: .day, value: 1, to: todayStart) else {
+            return []
+        }
+
+        let entries = try FoodLogEntry
+            .filter(FoodLogEntry.Columns.loggedAt >= startDate && FoodLogEntry.Columns.loggedAt < endDate)
+            .fetchAll(db)
+
+        let foodIds = Set(entries.map { $0.foodItemId })
+        let foodsById: [String: FoodItem]
+        if foodIds.isEmpty {
+            foodsById = [:]
+        } else {
+            let foods = try FoodItem.filter(foodIds.contains(FoodItem.Columns.id)).fetchAll(db)
+            foodsById = Dictionary(uniqueKeysWithValues: foods.map { ($0.id, $0) })
+        }
+
+        var totalsByDay: [Date: (kcal: Double, protein: Double)] = [:]
+        for entry in entries {
+            guard let food = foodsById[entry.foodItemId] else { continue }
+            let day = cal.startOfDay(for: entry.loggedAt)
+            let factor = entry.grams / 100.0
+            let current = totalsByDay[day] ?? (0, 0)
+            totalsByDay[day] = (
+                current.kcal + food.caloriesPer100g * factor,
+                current.protein + food.proteinPer100g * factor
+            )
+        }
+
+        return (0..<days).compactMap { offset -> DailyNutritionPoint? in
+            guard let day = cal.date(byAdding: .day, value: offset, to: startDate) else { return nil }
+            let vals = totalsByDay[day] ?? (0, 0)
+            return DailyNutritionPoint(date: day, calories: vals.kcal, protein: vals.protein)
+        }
+    }
+}
+
+// MARK: - Water, Supplements, Measurements & Readiness Operations
+
+extension AppDatabase {
+    static func fetchWaterMilliliters(forDayKey dayKey: String, in db: Database) throws -> Int {
+        try DailyWaterLog.fetchOne(db, key: dayKey)?.milliliters ?? 0
+    }
+
+    func adjustWater(forDayKey dayKey: String, deltaMl: Int) throws {
+        try dbWriter.write { db in
+            let current = try DailyWaterLog.fetchOne(db, key: dayKey)?.milliliters ?? 0
+            let updated = max(0, current + deltaMl)
+            try DailyWaterLog(dayKey: dayKey, milliliters: updated).save(db)
+        }
+    }
+
+    static func fetchSupplements(in db: Database) throws -> [Supplement] {
+        try Supplement
+            .order(Supplement.Columns.sortOrder.asc, Supplement.Columns.name.asc)
+            .fetchAll(db)
+    }
+
+    static func fetchTakenSupplementIds(forDayKey dayKey: String, in db: Database) throws -> Set<String> {
+        let logs = try SupplementLog
+            .filter(SupplementLog.Columns.dayKey == dayKey)
+            .fetchAll(db)
+        return Set(logs.map { $0.supplementId })
+    }
+
+    func saveSupplement(_ supplement: Supplement) throws {
+        try dbWriter.write { db in
+            try supplement.save(db)
+        }
+    }
+
+    func deleteSupplement(id: String) throws {
+        try dbWriter.write { db in
+            _ = try Supplement.deleteOne(db, key: id)
+        }
+    }
+
+    func toggleSupplementTaken(supplementId: String, dayKey: String) throws {
+        try dbWriter.write { db in
+            let existing = try SupplementLog
+                .filter(SupplementLog.Columns.supplementId == supplementId && SupplementLog.Columns.dayKey == dayKey)
+                .fetchOne(db)
+
+            if let existing = existing {
+                _ = try SupplementLog.deleteOne(db, key: existing.id)
+            } else {
+                try SupplementLog(supplementId: supplementId, dayKey: dayKey).insert(db)
+            }
+        }
+    }
+
+    static func fetchBodyMeasurements(in db: Database) throws -> [BodyMeasurement] {
+        try BodyMeasurement
+            .order(BodyMeasurement.Columns.recordedAt.desc)
+            .fetchAll(db)
+    }
+
+    func saveBodyMeasurement(_ measurement: BodyMeasurement) throws {
+        try dbWriter.write { db in
+            try measurement.save(db)
+        }
+    }
+
+    func deleteBodyMeasurement(id: String) throws {
+        try dbWriter.write { db in
+            _ = try BodyMeasurement.deleteOne(db, key: id)
+        }
+    }
+
+    static func fetchReadinessLogs(in db: Database) throws -> [ReadinessLog] {
+        try ReadinessLog
+            .order(ReadinessLog.Columns.recordedAt.desc)
+            .fetchAll(db)
+    }
+
+    func saveReadinessLog(_ log: ReadinessLog) throws {
+        try dbWriter.write { db in
+            try ReadinessLog
+                .filter(ReadinessLog.Columns.dayKey == log.dayKey)
+                .deleteAll(db)
+            try log.insert(db)
+        }
+    }
+
+    func deleteReadinessLog(id: String) throws {
+        try dbWriter.write { db in
+            _ = try ReadinessLog.deleteOne(db, key: id)
         }
     }
 }

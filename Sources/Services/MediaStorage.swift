@@ -107,6 +107,17 @@ final class MediaStorage {
         }
     }
 
+    func loadRawData(filename: String, in folder: MediaFolder) -> Data? {
+        guard let url = try? folderURL(for: folder).appendingPathComponent(filename) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    func saveRawData(_ data: Data, filename: String, in folder: MediaFolder) throws {
+        let url = try folderURL(for: folder).appendingPathComponent(filename)
+        try data.write(to: url, options: .atomic)
+        cache.removeObject(forKey: cacheKey(filename: filename, folder: folder))
+    }
+
     private func downscale(image: UIImage, maxDimension: CGFloat) -> UIImage {
         let size = image.size
         let longestSide = max(size.width, size.height)

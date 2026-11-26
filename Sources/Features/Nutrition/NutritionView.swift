@@ -1,13 +1,21 @@
+import Charts
 import SwiftUI
+import UIKit
 
 struct NutritionView: View {
     @EnvironmentObject private var nutritionStore: NutritionStore
+    @EnvironmentObject private var wellnessStore: WellnessStore
 
     @State private var addSheetMeal: MealType? = nil
     @State private var openScannerDirectly: Bool = false
     @State private var isShowingGoalsSheet: Bool = false
     @State private var showMicrosExpanded: Bool = false
+    @State private var showWeeklyTrendExpanded: Bool = false
     @State private var mealToSaveAsTemplate: MealType? = nil
+    @State private var isShowingAddSupplementAlert: Bool = false
+    @State private var newSupplementName: String = ""
+    @State private var newSupplementDosage: String = ""
+    @State private var copyFeedbackMessage: String? = nil
 
     private var totals: DailyNutritionTotals {
         nutritionStore.dayTotals
@@ -39,6 +47,8 @@ struct NutritionView: View {
                 VStack(spacing: 16) {
                     dateSwitcherBar
                     caloriesAndMacrosCard
+                    waterAndSupplementsCard
+                    weeklyTrendCard
                     micronutrientsCard
                     mealsSection
                 }
@@ -46,6 +56,12 @@ struct NutritionView: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Ernährung")
+            .onAppear {
+                wellnessStore.setSelectedDate(nutritionStore.selectedDate)
+            }
+            .onChange(of: nutritionStore.selectedDate) { newDate in
+                wellnessStore.setSelectedDate(newDate)
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
@@ -87,6 +103,38 @@ struct NutritionView: View {
                 ) { savedMeal, items in
                     nutritionStore.saveSavedMeal(savedMeal, items: items)
                 }
+            }
+            .alert("Neues Supplement", isPresented: $isShowingAddSupplementAlert) {
+                TextField("Name (z. B. Zink)", text: $newSupplementName)
+                TextField("Dosierung (optional, z. B. 25 mg)", text: $newSupplementDosage)
+                Button("Hinzufügen") {
+                    let trimmed = newSupplementName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    let dosage = newSupplementDosage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let supp = Supplement(
+                        name: trimmed,
+                        dosage: dosage.isEmpty ? nil : dosage,
+                        sortOrder: wellnessStore.supplements.count
+                    )
+                    wellnessStore.saveSupplement(supp)
+                    newSupplementName = ""
+                    newSupplementDosage = ""
+                }
+                Button("Abbrechen", role: .cancel) {
+                    newSupplementName = ""
+                    newSupplementDosage = ""
+                }
+            }
+            .alert(
+                "Hinweis",
+                isPresented: Binding(
+                    get: { copyFeedbackMessage != nil },
+                    set: { if !$0 { copyFeedbackMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(copyFeedbackMessage ?? "")
             }
         }
     }
@@ -194,6 +242,168 @@ struct NutritionView: View {
         .strongCard()
     }
 
+    private var waterAndSupplementsCard: some View {
+        let waterProgress = wellnessStore.dailyWaterGoalMl > 0
+            ? min(1.0, Double(wellnessStore.waterMl) / Double(wellnessStore.dailyWaterGoalMl))
+            : 0
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Wasser", systemImage: "drop.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.cyan)
+                Spacer()
+                Text("\(wellnessStore.waterMl) / \(wellnessStore.dailyWaterGoalMl) ml")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .monospacedDigit()
+            }
+
+            ProgressView(value: waterProgress)
+                .progressViewStyle(.linear)
+                .tint(.cyan)
+
+            HStack(spacing: 8) {
+                Button("-250 ml") {
+                    wellnessStore.adjustWater(deltaMl: -250)
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("+250 ml") {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    wellnessStore.adjustWater(deltaMl: 250)
+                }
+                .font(.caption)
+                .fontWeight(.semibold)
+                .buttonStyle(.borderedProminent)
+                .tint(.cyan)
+                .controlSize(.small)
+
+                Button("+500 ml") {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    wellnessStore.adjustWater(deltaMl: 500)
+                }
+                .font(.caption)
+                .fontWeight(.semibold)
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .controlSize(.small)
+
+                Spacer()
+            }
+
+            Divider()
+
+            HStack {
+                Label("Supplements", systemImage: "pills.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                Spacer()
+                Button {
+                    isShowingAddSupplementAlert = true
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.subheadline)
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(wellnessStore.supplements) { supp in
+                        let isTaken = wellnessStore.takenSupplementIds.contains(supp.id)
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            wellnessStore.toggleSupplement(supp)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: isTaken ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption)
+                                Text(supp.dosage.map { "\(supp.name) (\($0))" } ?? supp.name)
+                                    .font(.caption)
+                                    .fontWeight(isTaken ? .semibold : .regular)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(isTaken ? Color.green.opacity(0.18) : Color(uiColor: .tertiarySystemFill))
+                            .foregroundColor(isTaken ? .green : .primary)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                wellnessStore.deleteSupplement(id: supp.id)
+                            } label: {
+                                Label("Supplement entfernen", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard()
+    }
+
+    private var weeklyTrendCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showWeeklyTrendExpanded.toggle()
+                }
+            } label: {
+                HStack {
+                    Label("7-Tage-Trend", systemImage: "chart.bar.fill")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if nutritionStore.averageWeeklyCalories > 0 {
+                        Text("Ø \(nutritionStore.averageWeeklyCalories) kcal · \(nutritionStore.averageWeeklyProtein)g P")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Image(systemName: showWeeklyTrendExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if showWeeklyTrendExpanded {
+                Divider()
+                Chart {
+                    RuleMark(y: .value("Ziel", goals.targetCalories))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.6))
+
+                    ForEach(nutritionStore.weeklyPoints) { point in
+                        BarMark(
+                            x: .value("Tag", point.date, unit: .day),
+                            y: .value("kcal", point.calories)
+                        )
+                        .foregroundStyle(point.calories > Double(goals.targetCalories) ? Color.orange : Color.accentColor)
+                        .cornerRadius(5)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day)) { value in
+                        AxisValueLabel(format: .dateTime.weekday(.abbreviated))
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading)
+                }
+                .frame(height: 150)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard()
+    }
+
     private var micronutrientsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -262,7 +472,19 @@ struct NutritionView: View {
                         .padding(.leading, 4)
                     }
 
-                    if !items.isEmpty {
+                    if items.isEmpty {
+                        Button {
+                            let count = nutritionStore.copyMealFromYesterday(mealType: meal)
+                            if count == 0 {
+                                copyFeedbackMessage = "Für \(meal.displayName) gab es am Vortag keine Einträge."
+                            }
+                        } label: {
+                            Label("Von gestern kopieren", systemImage: "doc.on.doc")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
                         Divider()
                         ForEach(items) { detail in
                             HStack(spacing: 10) {

@@ -2,6 +2,12 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
+struct EmbeddedMediaFile: Codable {
+    var folder: String
+    var filename: String
+    var base64Data: String
+}
+
 struct BackupPayload: Codable {
     var schemaVersion: Int
     var exportedAt: Date
@@ -19,9 +25,15 @@ struct BackupPayload: Codable {
     var foodLogEntries: [FoodLogEntry]?
     var savedMeals: [SavedMeal]?
     var savedMealItems: [SavedMealItem]?
+    var dailyWaterLogs: [DailyWaterLog]?
+    var supplements: [Supplement]?
+    var supplementLogs: [SupplementLog]?
+    var bodyMeasurements: [BodyMeasurement]?
+    var readinessLogs: [ReadinessLog]?
+    var embeddedMedia: [EmbeddedMediaFile]?
 
     init(
-        schemaVersion: Int = 6,
+        schemaVersion: Int = 7,
         exportedAt: Date = Date(),
         exercises: [Exercise],
         routines: [Routine],
@@ -36,7 +48,13 @@ struct BackupPayload: Codable {
         foodItems: [FoodItem]? = nil,
         foodLogEntries: [FoodLogEntry]? = nil,
         savedMeals: [SavedMeal]? = nil,
-        savedMealItems: [SavedMealItem]? = nil
+        savedMealItems: [SavedMealItem]? = nil,
+        dailyWaterLogs: [DailyWaterLog]? = nil,
+        supplements: [Supplement]? = nil,
+        supplementLogs: [SupplementLog]? = nil,
+        bodyMeasurements: [BodyMeasurement]? = nil,
+        readinessLogs: [ReadinessLog]? = nil,
+        embeddedMedia: [EmbeddedMediaFile]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.exportedAt = exportedAt
@@ -54,6 +72,12 @@ struct BackupPayload: Codable {
         self.foodLogEntries = foodLogEntries
         self.savedMeals = savedMeals
         self.savedMealItems = savedMealItems
+        self.dailyWaterLogs = dailyWaterLogs
+        self.supplements = supplements
+        self.supplementLogs = supplementLogs
+        self.bodyMeasurements = bodyMeasurements
+        self.readinessLogs = readinessLogs
+        self.embeddedMedia = embeddedMedia
     }
 }
 
@@ -61,6 +85,7 @@ struct BackupImportSummary: Equatable {
     let exerciseCount: Int
     let routineCount: Int
     let workoutCount: Int
+    let mediaCount: Int
 }
 
 struct StrongTrackerBackupDocument: FileDocument {

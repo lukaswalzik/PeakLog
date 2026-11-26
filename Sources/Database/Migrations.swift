@@ -245,6 +245,61 @@ enum Migrations {
             }
         }
 
+        migrator.registerMigration("v9_wellness_and_tracking") { db in
+            try db.create(table: "daily_water_logs") { t in
+                t.column("dayKey", .text).primaryKey()
+                t.column("milliliters", .integer).notNull().defaults(to: 0)
+            }
+
+            try db.create(table: "supplements") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("dosage", .text)
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+            }
+
+            try db.create(table: "supplement_logs") { t in
+                t.column("id", .text).primaryKey()
+                t.column("supplementId", .text).notNull().references("supplements", onDelete: .cascade)
+                t.column("dayKey", .text).notNull()
+                t.column("takenAt", .datetime).notNull()
+            }
+
+            try db.create(table: "body_measurements") { t in
+                t.column("id", .text).primaryKey()
+                t.column("recordedAt", .datetime).notNull()
+                t.column("chestCm", .double)
+                t.column("waistCm", .double)
+                t.column("armCm", .double)
+                t.column("thighCm", .double)
+                t.column("notes", .text)
+            }
+
+            try db.create(table: "readiness_logs") { t in
+                t.column("id", .text).primaryKey()
+                t.column("dayKey", .text).notNull().unique()
+                t.column("recordedAt", .datetime).notNull()
+                t.column("readinessScore", .integer).notNull()
+                t.column("sleepHours", .double).notNull()
+                t.column("soreness", .integer).notNull().defaults(to: 2)
+                t.column("notes", .text)
+            }
+
+            try db.create(index: "idx_supplement_logs_dayKey", on: "supplement_logs", columns: ["dayKey"])
+            try db.create(index: "idx_body_measurements_recordedAt", on: "body_measurements", columns: ["recordedAt"])
+            try db.create(index: "idx_readiness_logs_recordedAt", on: "readiness_logs", columns: ["recordedAt"])
+
+            let defaults = [
+                Supplement(id: "supp-creatine", name: "Kreatin", dosage: "5 g", sortOrder: 0),
+                Supplement(id: "supp-vitd3", name: "Vitamin D3 + K2", dosage: "1 Kapsel", sortOrder: 1),
+                Supplement(id: "supp-omega3", name: "Omega-3", dosage: "2 Kapseln", sortOrder: 2),
+                Supplement(id: "supp-magnesium", name: "Magnesium", dosage: "400 mg", sortOrder: 3)
+            ]
+            for supp in defaults {
+                try supp.insert(db, onConflict: .ignore)
+            }
+        }
+
         return migrator
     }
 }

@@ -8,8 +8,10 @@ struct ProfileBackupView: View {
     @EnvironmentObject private var bodyweightStore: BodyweightStore
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var gymStore: GymStore
+    @EnvironmentObject private var wellnessStore: WellnessStore
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
+    @State private var exportIncludesPhotos: Bool = false
     @State private var isShowingExporter: Bool = false
     @State private var isShowingImporter: Bool = false
     @State private var pendingImportPayload: BackupPayload? = nil
@@ -148,6 +150,56 @@ struct ProfileBackupView: View {
                     }
 
                     NavigationLink {
+                        BodyMeasurementsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "ruler")
+                                .font(.title3)
+                                .foregroundColor(.indigo)
+                                .frame(width: 40, height: 40)
+                                .background(Color.indigo.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Körpermaße")
+                                    .font(.headline)
+                                Text(wellnessStore.measurements.isEmpty ? "Brust, Taille, Arm & Bein in cm" : "\(wellnessStore.measurements.count) Messungen gespeichert")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
+                        ReadinessView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bed.double.fill")
+                                .font(.title3)
+                                .foregroundColor(.mint)
+                                .frame(width: 40, height: 40)
+                                .background(Color.mint.opacity(0.16))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Readiness & Schlaf (Oura)")
+                                    .font(.headline)
+                                if let latest = wellnessStore.latestReadiness {
+                                    Text("Zuletzt: Score \(latest.readinessScore) · \(String(format: "%.1f", latest.sleepHours)) Std. Schlaf")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Tagesform, Schlafdauer & Muskelkater")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
                         GymsManagementView()
                     } label: {
                         HStack(spacing: 12) {
@@ -204,12 +256,21 @@ struct ProfileBackupView: View {
                     }
                 }
 
-                Section(header: Text("Cardio & HF-Zonen")) {
+                Section(header: Text("Cardio & Wasser")) {
                     Stepper(value: $cardioStore.maxHeartRate, in: 130...220) {
                         HStack {
                             Text("Maximale Herzfrequenz")
                             Spacer()
                             Text("\(cardioStore.maxHeartRate) bpm")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Stepper(value: $wellnessStore.dailyWaterGoalMl, in: 1000...7000, step: 250) {
+                        HStack {
+                            Text("Wasser-Tagesziel")
+                            Spacer()
+                            Text("\(wellnessStore.dailyWaterGoalMl) ml")
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -240,12 +301,18 @@ struct ProfileBackupView: View {
 
                 Section(
                     header: Text("Lokales Backup (JSON)"),
-                    footer: Text("Exportiert alle Übungen, Routinen und Workouts als lokale JSON-Datei. Beim Import werden die aktuellen Daten atomar durch das Backup ersetzt.")
+                    footer: Text("Das Komplett-Backup bettet zusätzlich alle eigenen Übungs- und Fortschrittsfotos direkt in die Backup-Datei ein.")
                 ) {
                     Button {
-                        prepareExport()
+                        prepareExport(includePhotos: false)
                     } label: {
                         Label("Daten als JSON exportieren", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        prepareExport(includePhotos: true)
+                    } label: {
+                        Label("Komplett-Backup inkl. Fotos", systemImage: "photo.on.rectangle.angled")
                     }
 
                     Button {
@@ -264,11 +331,11 @@ struct ProfileBackupView: View {
                 isPresented: $isShowingExporter,
                 document: exportDocument,
                 contentType: .json,
-                defaultFilename: BackupService.defaultFilename()
+                defaultFilename: BackupService.defaultFilename(includePhotos: exportIncludesPhotos)
             ) { result in
                 switch result {
                 case .success:
-                    showStatus(title: "Export erfolgreich", message: "Dein JSON-Backup wurde gespeichert.")
+                    showStatus(title: "Export erfolgreich", message: exportIncludesPhotos ? "Dein Komplett-Backup (inkl. Fotos) wurde gespeichert." : "Dein JSON-Backup wurde gespeichert.")
                 case .failure(let error):
                     showStatus(title: "Export fehlgeschlagen", message: error.localizedDescription)
                 }
@@ -298,7 +365,8 @@ struct ProfileBackupView: View {
                     pendingImportPayload = nil
                 }
             } message: { payload in
-                Text("Alle aktuellen Daten werden durch das Backup ersetzt (\(payload.exercises.count) Übungen, \(payload.routines.count) Routinen, \(payload.workouts.count) Workouts).")
+                let photoCount = payload.embeddedMedia?.count ?? 0
+                Text("Alle aktuellen Daten werden durch das Backup ersetzt (\(payload.exercises.count) Übungen, \(payload.routines.count) Routinen, \(payload.workouts.count) Workouts, \(photoCount) Fotos).")
             }
             .alert(statusAlertTitle, isPresented: $isShowingStatusAlert) {
                 Button("OK", role: .cancel) {}
@@ -308,9 +376,10 @@ struct ProfileBackupView: View {
         }
     }
 
-    private func prepareExport() {
+    private func prepareExport(includePhotos: Bool) {
         do {
-            let data = try BackupService.exportJSONData(from: historyStore.database)
+            let data = try BackupService.exportJSONData(from: historyStore.database, includePhotos: includePhotos)
+            exportIncludesPhotos = includePhotos
             exportDocument = StrongTrackerBackupDocument(data: data)
             isShowingExporter = true
         } catch {
@@ -348,7 +417,7 @@ struct ProfileBackupView: View {
             let summary = try BackupService.importPayload(payload, into: historyStore.database)
             showStatus(
                 title: "Import abgeschlossen",
-                message: "\(summary.exerciseCount) Übungen, \(summary.routineCount) Routinen und \(summary.workoutCount) Workouts wurden wiederhergestellt."
+                message: "\(summary.exerciseCount) Übungen, \(summary.routineCount) Routinen, \(summary.workoutCount) Workouts und \(summary.mediaCount) Fotos wurden wiederhergestellt."
             )
         } catch {
             showStatus(title: "Import fehlgeschlagen", message: error.localizedDescription)

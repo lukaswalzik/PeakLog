@@ -12,6 +12,7 @@ final class NutritionStore: ObservableObject {
     @Published private(set) var foodItems: [FoodItem] = []
     @Published private(set) var savedMeals: [SavedMealWithItems] = []
     @Published private(set) var dayEntries: [FoodLogEntryDetail] = []
+    @Published private(set) var weeklyPoints: [DailyNutritionPoint] = []
     @Published var goals: NutritionGoals {
         didSet {
             persistGoals()
@@ -23,6 +24,7 @@ final class NutritionStore: ObservableObject {
     private var foodsCancellable: AnyDatabaseCancellable?
     private var mealsCancellable: AnyDatabaseCancellable?
     private var dayCancellable: AnyDatabaseCancellable?
+    private var weeklyCancellable: AnyDatabaseCancellable?
 
     init(database: AppDatabase) {
         self.database = database
@@ -37,10 +39,23 @@ final class NutritionStore: ObservableObject {
         startFoodsObservation()
         startSavedMealsObservation()
         startDayObservation(for: selectedDate)
+        startWeeklyObservation()
     }
 
     var dayTotals: DailyNutritionTotals {
         DailyNutritionTotals.from(dayEntries)
+    }
+
+    var averageWeeklyCalories: Int {
+        let nonZero = weeklyPoints.filter { $0.calories > 0 }
+        guard !nonZero.isEmpty else { return 0 }
+        return Int(round(nonZero.reduce(0) { $0 + $1.calories } / Double(nonZero.count)))
+    }
+
+    var averageWeeklyProtein: Int {
+        let nonZero = weeklyPoints.filter { $0.calories > 0 }
+        guard !nonZero.isEmpty else { return 0 }
+        return Int(round(nonZero.reduce(0) { $0 + $1.protein } / Double(nonZero.count)))
     }
 
     var favoriteFoods: [FoodItem] {
@@ -115,6 +130,21 @@ final class NutritionStore: ObservableObject {
             },
             onChange: { [weak self] entries in
                 self?.dayEntries = entries
+            }
+        )
+    }
+
+    private func startWeeklyObservation() {
+        let observation = ValueObservation.tracking { db in
+            try AppDatabase.fetchDailyNutritionPoints(days: 7, in: db)
+        }
+
+        weeklyCancellable = observation.start(
+            in: database.dbWriter,
+            scheduling: .async(onQueue: .main),
+            onError: { _ in },
+            onChange: { [weak self] points in
+                self?.weeklyPoints = points
             }
         )
     }
@@ -195,6 +225,16 @@ final class NutritionStore: ObservableObject {
             try database.logSavedMeal(meal, mealType: mealType, multiplier: multiplier, date: date ?? selectedDate)
         } catch {
             errorMessage = "Mahlzeit konnte nicht geloggt werden: \(error.localizedDescription)"
+        }
+    }
+
+    @discardableResult
+    func copyMealFromYesterday(mealType: MealType) -> Int {
+        do {
+            return try database.copyMealFromPreviousDay(mealType: mealType, toDay: selectedDate)
+        } catch {
+            errorMessage = "Mahlzeit konnte nicht kopiert werden: \(error.localizedDescription)"
+            return 0
         }
     }
 }
