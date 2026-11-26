@@ -13,6 +13,7 @@ struct NutritionView: View {
     @State private var isShowingGoalsSheet: Bool = false
     @State private var isShowingAdaptiveTDEE: Bool = false
     @State private var isShowingMacroHelper: Bool = false
+    @State private var isShowingAIScanner: Bool = false
     @State private var showMicrosExpanded: Bool = false
     @State private var showWeeklyTrendExpanded: Bool = false
     @State private var mealToSaveAsTemplate: MealType? = nil
@@ -97,14 +98,24 @@ struct NutritionView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        openScannerDirectly = true
-                        addSheetMeal = defaultMealForCurrentHour()
-                    } label: {
-                        Image(systemName: "barcode.viewfinder")
-                            .font(.title3)
+                    HStack(spacing: 14) {
+                        Button {
+                            isShowingAIScanner = true
+                        } label: {
+                            Image(systemName: "sparkles")
+                                .font(.title3)
+                        }
+                        .accessibilityLabel("KI-Scanner")
+
+                        Button {
+                            openScannerDirectly = true
+                            addSheetMeal = defaultMealForCurrentHour()
+                        } label: {
+                            Image(systemName: "barcode.viewfinder")
+                                .font(.title3)
+                        }
+                        .accessibilityLabel("Barcode scannen")
                     }
-                    .accessibilityLabel("Barcode scannen")
                 }
             }
             .sheet(item: $addSheetMeal) { meal in
@@ -121,6 +132,9 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $isShowingAdaptiveTDEE) {
                 AdaptiveTDEESheetView()
+            }
+            .sheet(isPresented: $isShowingAIScanner) {
+                AIMealScannerSheetView(initialMealType: defaultMealForCurrentHour())
             }
             .sheet(isPresented: $isShowingMacroHelper) {
                 MacroHelperSheetView(
@@ -296,11 +310,23 @@ struct NutritionView: View {
                 )
             }
 
+            Button {
+                isShowingAIScanner = true
+            } label: {
+                Label("KI-Scanner (Foto oder Text)", systemImage: "sparkles")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+
             HStack(spacing: 8) {
                 Button {
                     isShowingMacroHelper = true
                 } label: {
-                    Label("Was fehlt noch?", systemImage: "sparkles")
+                    Label("Was fehlt noch?", systemImage: "wand.and.stars")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)

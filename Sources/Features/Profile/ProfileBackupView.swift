@@ -68,6 +68,52 @@ struct ProfileBackupView: View {
                     .listRowBackground(Color.clear)
                 }
 
+                Section(header: Text("KI-Assistent (Mistral)")) {
+                    NavigationLink {
+                        AICoachView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "sparkles")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+                                .frame(width: 40, height: 40)
+                                .background(Color.orange.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("KI-Coach (Mistral)")
+                                    .font(.headline)
+                                Text("Datenbasierte Trainings- & Ernährungs-Analyse")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
+                        MistralSettingsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "key.fill")
+                                .font(.title3)
+                                .foregroundColor(.teal)
+                                .frame(width: 40, height: 40)
+                                .background(Color.teal.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Mistral KI-Einstellungen")
+                                    .font(.headline)
+                                Text(MistralAIService.shared.isConfigured ? "API-Key aktiv · \(MistralAIService.shared.selectedModel.displayName)" : "API-Key aus console.mistral.ai hinterlegen")
+                                    .font(.caption)
+                                    .foregroundColor(MistralAIService.shared.isConfigured ? .green : .secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section(header: Text("Fortschritt & Motivation")) {
                     NavigationLink {
                         ProgressDashboardView()

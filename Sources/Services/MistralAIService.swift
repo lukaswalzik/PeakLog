@@ -1,0 +1,475 @@
+import Foundation
+import Security
+import UIKit
+
+enum MistralModel: String, CaseIterable, Identifiable, Codable {
+    case smallLatest = "mistral-small-latest"
+    case largeLatest = "mistral-large-latest"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .smallLatest: return "Mistral Small 4 (Schnell & Vision)"
+        case .largeLatest: return "Mistral Large 4 (Top Analyse & Vision)"
+        }
+    }
+
+    var shortSubtitle: String {
+        switch self {
+        case .smallLatest: return "Sehr schnell & günstig – ideal für Foto-/Text-Scanner"
+        case .largeLatest: return "Maximale Qualität für Coaching & komplexe Bilder"
+        }
+    }
+}
+
+struct AIEstimatedFood: Identifiable, Equatable, Codable {
+    var id: String = UUID().uuidString
+    var name: String
+    var grams: Double
+    var caloriesPer100g: Double
+    var proteinPer100g: Double
+    var carbsPer100g: Double
+    var fatPer100g: Double
+    var fiberPer100g: Double
+    var note: String?
+    var isSelected: Bool = true
+
+    enum CodingKeys: String, CodingKey {
+        case name, grams, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, note
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        name: String,
+        grams: Double,
+        caloriesPer100g: Double,
+        proteinPer100g: Double,
+        carbsPer100g: Double,
+        fatPer100g: Double,
+        fiberPer100g: Double = 0,
+        note: String? = nil,
+        isSelected: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.grams = grams
+        self.caloriesPer100g = caloriesPer100g
+        self.proteinPer100g = proteinPer100g
+        self.carbsPer100g = carbsPer100g
+        self.fatPer100g = fatPer100g
+        self.fiberPer100g = fiberPer100g
+        self.note = note
+        self.isSelected = isSelected
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = UUID().uuidString
+        name = try c.decode(String.self, forKey: .name)
+        grams = max(1, (try? c.decode(Double.self, forKey: .grams)) ?? 100)
+        caloriesPer100g = max(0, (try? c.decode(Double.self, forKey: .caloriesPer100g)) ?? 0)
+        proteinPer100g = max(0, (try? c.decode(Double.self, forKey: .proteinPer100g)) ?? 0)
+        carbsPer100g = max(0, (try? c.decode(Double.self, forKey: .carbsPer100g)) ?? 0)
+        fatPer100g = max(0, (try? c.decode(Double.self, forKey: .fatPer100g)) ?? 0)
+        fiberPer100g = max(0, (try? c.decode(Double.self, forKey: .fiberPer100g)) ?? 0)
+        note = try? c.decodeIfPresent(String.self, forKey: .note)
+        isSelected = true
+    }
+
+    private var factor: Double { grams / 100.0 }
+    var totalCalories: Double { caloriesPer100g * factor }
+    var totalProtein: Double { proteinPer100g * factor }
+    var totalCarbs: Double { carbsPer100g * factor }
+    var totalFat: Double { fatPer100g * factor }
+
+    func toFoodItem() -> FoodItem {
+        FoodItem(
+            name: name,
+            brand: "Mistral KI",
+            servingSizeGrams: grams,
+            caloriesPer100g: caloriesPer100g,
+            proteinPer100g: proteinPer100g,
+            carbsPer100g: carbsPer100g,
+            fatPer100g: fatPer100g,
+            fiberPer100g: fiberPer100g,
+            isCustom: true
+        )
+    }
+}
+
+enum MistralAIError: LocalizedError {
+    case missingAPIKey
+    case invalidResponse
+    case apiError(Int, String)
+    case decodingFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingAPIKey:
+            return "Kein Mistral API-Key hinterlegt. Öffne Profil → Mistral KI-Einstellungen und füge deinen Key ein."
+        case .invalidResponse:
+            return "Ungültige Antwort von der Mistral API."
+        case .apiError(let code, let message):
+            if code == 401 {
+                return "API-Key ungültig oder abgelaufen (HTTP 401). Bitte prüfe deinen Key unter console.mistral.ai."
+            }
+            if code == 429 {
+                return "Rate-Limit oder Monats-Budget erreicht (HTTP 429). Bitte kurz warten oder Budget prüfen."
+            }
+            return "Mistral API Fehler (\(code)): \(message)"
+        case .decodingFailed(let detail):
+            return "Antwort konnte nicht verarbeitet werden: \(detail)"
+        }
+    }
+}
+
+final class MistralAIService: ObservableObject {
+    static let shared = MistralAIService()
+
+    private static let keychainService = "com.local.strongtracker.mistral"
+    private static let keychainAccount = "api_key"
+    private static let fallbackDefaultsKey = "strongtracker.mistral.apikey.fallback"
+    private static let modelDefaultsKey = "strongtracker.mistral.model"
+    private static let lastReportDefaultsKey = "strongtracker.mistral.lastCoachReport"
+
+    @Published var apiKey: String {
+        didSet {
+            saveAPIKey(apiKey)
+        }
+    }
+
+    @Published var selectedModel: MistralModel {
+        didSet {
+            UserDefaults.standard.set(selectedModel.rawValue, forKey: Self.modelDefaultsKey)
+        }
+    }
+
+    @Published var lastCoachReport: String {
+        didSet {
+            UserDefaults.standard.set(lastCoachReport, forKey: Self.lastReportDefaultsKey)
+        }
+    }
+
+    var isConfigured: Bool {
+        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private let session: URLSession
+
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 45
+        config.timeoutIntervalForResource = 60
+        self.session = URLSession(configuration: config)
+
+        self.apiKey = Self.loadAPIKey()
+        if let savedModel = UserDefaults.standard.string(forKey: Self.modelDefaultsKey),
+           let parsed = MistralModel(rawValue: savedModel) {
+            self.selectedModel = parsed
+        } else {
+            self.selectedModel = .smallLatest
+        }
+        self.lastCoachReport = UserDefaults.standard.string(forKey: Self.lastReportDefaultsKey) ?? ""
+    }
+
+    // MARK: - Secure Local Storage (Keychain with UserDefaults fallback for unsigned TrollStore IPAs)
+
+    private static func loadAPIKey() -> String {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+           let data = result as? Data,
+           let str = String(data: data, encoding: .utf8),
+           !str.isEmpty {
+            return str
+        }
+        return UserDefaults.standard.string(forKey: fallbackDefaultsKey) ?? ""
+    }
+
+    private func saveAPIKey(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Self.keychainService,
+            kSecAttrAccount as String: Self.keychainAccount
+        ]
+        SecItemDelete(baseQuery as CFDictionary)
+
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Self.fallbackDefaultsKey)
+            return
+        }
+
+        if let data = trimmed.data(using: .utf8) {
+            var addQuery = baseQuery
+            addQuery[kSecValueData as String] = data
+            let status = SecItemAdd(addQuery as CFDictionary, nil)
+            if status != errSecSuccess {
+                UserDefaults.standard.set(trimmed, forKey: Self.fallbackDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.fallbackDefaultsKey)
+            }
+        }
+    }
+
+    // MARK: - Connection Test
+
+    func testConnection() async throws -> String {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { throw MistralAIError.missingAPIKey }
+
+        var request = URLRequest(url: URL(string: "https://api.mistral.ai/v1/models")!)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw MistralAIError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let msg = String(data: data, encoding: .utf8) ?? "Unbekannter Fehler"
+            throw MistralAIError.apiError(http.statusCode, msg)
+        }
+
+        struct ModelsList: Decodable {
+            struct ModelEntry: Decodable { let id: String }
+            let data: [ModelEntry]
+        }
+        if let decoded = try? JSONDecoder().decode(ModelsList.self, from: data) {
+            return "Verbunden! \(decoded.data.count) Mistral-Modelle verfügbar."
+        }
+        return "Verbindung erfolgreich!"
+    }
+
+    // MARK: - Meal Text Analysis
+
+    func analyzeMealText(_ text: String) async throws -> [AIEstimatedFood] {
+        let systemPrompt = """
+        Du bist ein präziser deutscher Ernährungs-Assistent. Zerlege die beschriebene Mahlzeit in einzelne Lebensmittel mit realistischen Nährwerten pro 100g und geschätzter Portionsgröße in Gramm.
+        Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt im Format:
+        {
+          "items": [
+            {
+              "name": "Magerquark",
+              "grams": 250,
+              "caloriesPer100g": 67,
+              "proteinPer100g": 12.0,
+              "carbsPer100g": 4.0,
+              "fatPer100g": 0.3,
+              "fiberPer100g": 0.0,
+              "note": "optionaler kurzer Hinweis"
+            }
+          ]
+        }
+        Keine Erklärungen außerhalb des JSON.
+        """
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": text]
+        ]
+
+        let content = try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: true,
+            temperature: 0.2
+        )
+        return try parseEstimatedFoods(from: content)
+    }
+
+    // MARK: - Meal Photo Analysis (Vision)
+
+    func analyzeMealPhoto(_ image: UIImage, hint: String? = nil) async throws -> [AIEstimatedFood] {
+        guard let base64 = encodeImageForVision(image) else {
+            throw MistralAIError.decodingFailed("Bild konnte nicht komprimiert werden.")
+        }
+
+        let systemPrompt = """
+        Du bist ein präziser deutscher Ernährungs- und Vision-Assistent.
+        Analysiere das Foto:
+        - Wenn es ein Teller/Essen ist: Erkenne alle sichtbaren Komponenten, schätze realistische Portionsgrößen in Gramm und gib die Nährwerte pro 100g an.
+        - Wenn es eine Nährwerttabelle / Verpackung ist: Lies die exakten Nährwerte pro 100g ab und setze grams auf eine typische Portion (oder 100g).
+        Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt im Format:
+        {
+          "items": [
+            {
+              "name": "Hähnchenbrust gebraten",
+              "grams": 180,
+              "caloriesPer100g": 165,
+              "proteinPer100g": 31.0,
+              "carbsPer100g": 0.0,
+              "fatPer100g": 3.6,
+              "fiberPer100g": 0.0,
+              "note": "geschätzte Portion"
+            }
+          ]
+        }
+        Keine Erklärungen außerhalb des JSON.
+        """
+
+        var userText = "Bitte analysiere dieses Foto und gib alle erkannten Lebensmittel als JSON zurück."
+        if let hint = hint?.trimmingCharacters(in: .whitespacesAndNewlines), !hint.isEmpty {
+            userText += " Zusatzhinweis vom Nutzer: \(hint)"
+        }
+
+        let userContent: [[String: Any]] = [
+            ["type": "text", "text": userText],
+            ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64)"]]
+        ]
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": userContent]
+        ]
+
+        let content = try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: true,
+            temperature: 0.2
+        )
+        return try parseEstimatedFoods(from: content)
+    }
+
+    // MARK: - AI Coach Analysis
+
+    func generateCoachingReport(dataSummary: String, question: String) async throws -> String {
+        let systemPrompt = """
+        Du bist ein evidenzbasierter Kraftsport-, Hypertrophie- und Ernährungs-Coach (auf Deutsch, per Du).
+        Du analysierst die echten Trainings- und Ernährungsdaten des Nutzers aus StrongTracker.
+        Strukturiere deine Antwort klar, knapp und praxisnah mit kurzen Abschnitten und Bulletpoints:
+        1. Was richtig gut läuft
+        2. Auffälligkeiten / Baustellen
+        3. Konkrete Empfehlungen für die nächste Woche
+        Bleibe realistisch, wissenschaftlich fundiert (Hypertrophie 10–20 Sätze/Muskelgruppe, Protein ~1,8–2,2 g/kg, Progressive Overload) und vermeide Floskeln.
+        """
+
+        let userMessage = """
+        Hier sind meine aktuellen Daten aus StrongTracker:
+        \(dataSummary)
+
+        Meine Frage / Fokus:
+        \(question)
+        """
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": userMessage]
+        ]
+
+        let content = try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: false,
+            temperature: 0.4
+        )
+        await MainActor.run {
+            self.lastCoachReport = content
+        }
+        return content
+    }
+
+    // MARK: - HTTP Core
+
+    private func sendChatCompletion(
+        model: String,
+        messages: [[String: Any]],
+        expectJSON: Bool,
+        temperature: Double
+    ) async throws -> String {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { throw MistralAIError.missingAPIKey }
+
+        var request = URLRequest(url: URL(string: "https://api.mistral.ai/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = [
+            "model": model,
+            "messages": messages,
+            "temperature": temperature
+        ]
+        if expectJSON {
+            body["response_format"] = ["type": "json_object"]
+        }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw MistralAIError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let errText = String(data: data, encoding: .utf8) ?? "Unbekannter API-Fehler"
+            throw MistralAIError.apiError(http.statusCode, errText)
+        }
+
+        struct ChatResponse: Decodable {
+            struct Choice: Decodable {
+                struct Message: Decodable {
+                    let content: String?
+                }
+                let message: Message
+            }
+            let choices: [Choice]
+        }
+
+        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+        guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
+            throw MistralAIError.invalidResponse
+        }
+        return text
+    }
+
+    private func parseEstimatedFoods(from rawContent: String) throws -> [AIEstimatedFood] {
+        var cleaned = rawContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.hasPrefix("```") {
+            if let firstNewline = cleaned.firstIndex(of: "\n") {
+                cleaned = String(cleaned[cleaned.index(after: firstNewline)...])
+            }
+            if cleaned.hasSuffix("```") {
+                cleaned = String(cleaned.dropLast(3))
+            }
+            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        guard let data = cleaned.data(using: .utf8) else {
+            throw MistralAIError.decodingFailed("Ungültiges UTF-8")
+        }
+
+        struct Wrapper: Decodable {
+            let items: [AIEstimatedFood]
+        }
+
+        if let wrapped = try? JSONDecoder().decode(Wrapper.self, from: data), !wrapped.items.isEmpty {
+            return wrapped.items
+        }
+        if let directArray = try? JSONDecoder().decode([AIEstimatedFood].self, from: data), !directArray.isEmpty {
+            return directArray
+        }
+
+        throw MistralAIError.decodingFailed("Keine Lebensmittel in der KI-Antwort erkannt.")
+    }
+
+    private func encodeImageForVision(_ image: UIImage) -> String? {
+        let maxDimension: CGFloat = 1024
+        let size = image.size
+        let scale = min(1.0, maxDimension / max(size.width, size.height))
+        let targetSize = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        return resized.jpegData(compressionQuality: 0.72)?.base64EncodedString()
+    }
+}
