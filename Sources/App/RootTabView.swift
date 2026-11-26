@@ -8,22 +8,16 @@ struct RootTabView: View {
         case profile
     }
 
-    @State private var selectedTab: Tab = .exercises
+    @State private var selectedTab: Tab = .start
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                EmptyStateView(
-                    systemImage: "figure.strengthtraining.traditional",
-                    title: "Routinen & Schnellstart",
-                    message: "Trainingsvorlagen und das Starten von Workouts werden in Phase 2 & 3 ergänzt."
-                )
-                .navigationTitle("Start")
-            }
-            .tabItem {
-                Label("Start", systemImage: "figure.strengthtraining.traditional")
-            }
-            .tag(Tab.start)
+            StartView()
+                .toolbarBackground(.visible, for: .tabBar)
+                .tabItem {
+                    Label("Start", systemImage: "figure.strengthtraining.traditional")
+                }
+                .tag(Tab.start)
 
             NavigationStack {
                 EmptyStateView(
@@ -33,12 +27,14 @@ struct RootTabView: View {
                 )
                 .navigationTitle("Verlauf")
             }
+            .toolbarBackground(.visible, for: .tabBar)
             .tabItem {
                 Label("Verlauf", systemImage: "clock.arrow.circlepath")
             }
             .tag(Tab.history)
 
             ExerciseListView()
+                .toolbarBackground(.visible, for: .tabBar)
                 .tabItem {
                     Label("Übungen", systemImage: "dumbbell")
                 }
@@ -52,6 +48,7 @@ struct RootTabView: View {
                 )
                 .navigationTitle("Profil")
             }
+            .toolbarBackground(.visible, for: .tabBar)
             .tabItem {
                 Label("Profil", systemImage: "person.crop.circle")
             }
@@ -62,7 +59,9 @@ struct RootTabView: View {
 
 struct RootTabView_Previews: PreviewProvider {
     static var previews: some View {
+        let db = AppDatabase.makeInMemory()
         RootTabView()
-            .environmentObject(ExerciseStore(database: .makeInMemory()))
+            .environmentObject(ExerciseStore(database: db))
+            .environmentObject(RoutineStore(database: db))
     }
 }

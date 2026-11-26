@@ -79,3 +79,76 @@ extension AppDatabase {
         }
     }
 }
+
+// MARK: - Routine Operations
+
+extension AppDatabase {
+    static func fetchRoutinesWithExercises(in db: Database) throws -> [RoutineWithExercises] {
+        let routines = try Routine
+            .order(Routine.Columns.sortOrder.asc, Routine.Columns.createdAt.desc)
+            .fetchAll(db)
+
+        guard !routines.isEmpty else { return [] }
+
+        let allRoutineExercises = try RoutineExercise
+            .order(RoutineExercise.Columns.sortOrder.asc)
+            .fetchAll(db)
+
+        let exerciseIds = Set(allRoutineExercises.map { $0.exerciseId })
+        let exercisesById: [String: Exercise]
+        if exerciseIds.isEmpty {
+            exercisesById = [:]
+        } else {
+            let exercises = try Exercise
+                .filter(exerciseIds.contains(Exercise.Columns.id))
+                .fetchAll(db)
+            exercisesById = Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+        }
+
+        let groupedByRoutine = Dictionary(grouping: allRoutineExercises, by: { $0.routineId })
+
+        return routines.map { routine in
+            let items = (groupedByRoutine[routine.id] ?? []).compactMap { re -> RoutineExerciseDetail? in
+                guard let exercise = exercisesById[re.exerciseId] else { return nil }
+                return RoutineExerciseDetail(routineExercise: re, exercise: exercise)
+            }
+            return RoutineWithExercises(routine: routine, exercises: items)
+        }
+    }
+
+    func saveRoutine(_ routine: Routine, exercises: [RoutineExercise]) throws {
+        try dbWriter.write { db in
+            var updatedRoutine = routine
+            updatedRoutine.updatedAt = Date()
+            try updatedRoutine.save(db)
+
+            try RoutineExercise
+                .filter(RoutineExercise.Columns.routineId == updatedRoutine.id)
+                .deleteAll(db)
+
+            for (index, item) in exercises.enumerated() {
+                var normalized = item
+                normalized.routineId = updatedRoutine.id
+                normalized.sortOrder = index
+                try normalized.insert(db)
+            }
+        }
+    }
+
+    func deleteRoutine(id: String) throws {
+        try dbWriter.write { db in
+            _ = try Routine.deleteOne(db, key: id)
+        }
+    }
+
+    func reorderRoutines(ids: [String]) throws {
+        try dbWriter.write { db in
+            for (index, id) in ids.enumerated() {
+                try db.execute(
+                    sql: "UPDATE routines SET sortOrder = ?, updatedAt = ? WHERE id = ?",
+                    arguments: [index, Date(), id]
+                )
+            }
+        }
+    }
+}
