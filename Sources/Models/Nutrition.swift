@@ -61,6 +61,14 @@ struct FoodItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Pe
     var isFavorite: Bool
     var createdAt: Date
 
+    enum CodingKeys: String, CodingKey {
+        case id, name, brand, barcode, servingSizeGrams
+        case caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g
+        case fiberPer100g, sugarPer100g, saltPer100g
+        case vitaminCMgPer100g, calciumMgPer100g, ironMgPer100g
+        case isCustom, isFavorite, createdAt
+    }
+
     enum Columns {
         static let id = Column(CodingKeys.id)
         static let name = Column(CodingKeys.name)
