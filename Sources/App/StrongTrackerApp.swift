@@ -11,6 +11,7 @@ struct StrongTrackerApp: App {
     @StateObject private var bodyweightStore: BodyweightStore
     @StateObject private var cardioStore: CardioStore
     @StateObject private var gymStore: GymStore
+    @StateObject private var nutritionStore: NutritionStore
 
     init() {
         let db = AppDatabase.shared
@@ -28,6 +29,7 @@ struct StrongTrackerApp: App {
         _bodyweightStore = StateObject(wrappedValue: BodyweightStore(database: db))
         _cardioStore = StateObject(wrappedValue: CardioStore(database: db))
         _gymStore = StateObject(wrappedValue: GymStore(database: db))
+        _nutritionStore = StateObject(wrappedValue: NutritionStore(database: db))
 
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
@@ -46,6 +48,7 @@ struct StrongTrackerApp: App {
                 .environmentObject(bodyweightStore)
                 .environmentObject(cardioStore)
                 .environmentObject(gymStore)
+                .environmentObject(nutritionStore)
         }
     }
 }

@@ -663,7 +663,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 4,
+                schemaVersion: 5,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -674,7 +674,9 @@ extension AppDatabase {
                 bodyweightEntries: try BodyweightEntry.fetchAll(db),
                 bodyweightPhotos: try BodyweightPhoto.fetchAll(db),
                 cardioSessions: try CardioSession.fetchAll(db),
-                gyms: try Gym.fetchAll(db)
+                gyms: try Gym.fetchAll(db),
+                foodItems: try FoodItem.fetchAll(db),
+                foodLogEntries: try FoodLogEntry.fetchAll(db)
             )
         }
     }
@@ -682,6 +684,8 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try FoodLogEntry.deleteAll(db)
+            try FoodItem.deleteAll(db)
             try CardioSession.deleteAll(db)
             try BodyweightPhoto.deleteAll(db)
             try BodyweightEntry.deleteAll(db)
@@ -704,6 +708,12 @@ extension AppDatabase {
             for item in payload.bodyweightEntries ?? [] { try item.insert(db) }
             for item in payload.bodyweightPhotos ?? [] { try item.insert(db) }
             for item in payload.cardioSessions ?? [] { try item.insert(db) }
+            if let foods = payload.foodItems, !foods.isEmpty {
+                for item in foods { try item.insert(db) }
+            } else {
+                try SeedFoods.insertDefaultFoods(in: db)
+            }
+            for item in payload.foodLogEntries ?? [] { try item.insert(db) }
         }
     }
 }
@@ -806,6 +816,72 @@ extension AppDatabase {
                 sql: "UPDATE workouts SET gymId = ? WHERE id = ?",
                 arguments: [gymId, workoutId]
             )
+        }
+    }
+}
+
+// MARK: - Nutrition Operations
+
+extension AppDatabase {
+    static func fetchFoodItems(in db: Database) throws -> [FoodItem] {
+        try FoodItem
+            .order(FoodItem.Columns.name.collating(.localizedCaseInsensitiveCompare))
+            .fetchAll(db)
+    }
+
+    static func fetchFoodLogEntries(forDay day: Date, in db: Database) throws -> [FoodLogEntryDetail] {
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: day)
+        guard let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay) else { return [] }
+
+        let entries = try FoodLogEntry
+            .filter(FoodLogEntry.Columns.loggedAt >= startOfDay && FoodLogEntry.Columns.loggedAt < endOfDay)
+            .order(FoodLogEntry.Columns.loggedAt.asc)
+            .fetchAll(db)
+
+        guard !entries.isEmpty else { return [] }
+
+        let foodIds = Set(entries.map { $0.foodItemId })
+        let foods = try FoodItem
+            .filter(foodIds.contains(FoodItem.Columns.id))
+            .fetchAll(db)
+        let foodsById = Dictionary(uniqueKeysWithValues: foods.map { ($0.id, $0) })
+
+        return entries.compactMap { entry in
+            guard let food = foodsById[entry.foodItemId] else { return nil }
+            return FoodLogEntryDetail(entry: entry, food: food)
+        }
+    }
+
+    func findFoodItem(byBarcode barcode: String) throws -> FoodItem? {
+        try dbWriter.read { db in
+            try FoodItem
+                .filter(FoodItem.Columns.barcode == barcode)
+                .fetchOne(db)
+        }
+    }
+
+    func saveFoodItem(_ item: FoodItem) throws {
+        try dbWriter.write { db in
+            try item.save(db)
+        }
+    }
+
+    func deleteFoodItem(id: String) throws {
+        try dbWriter.write { db in
+            _ = try FoodItem.deleteOne(db, key: id)
+        }
+    }
+
+    func saveFoodLogEntry(_ entry: FoodLogEntry) throws {
+        try dbWriter.write { db in
+            try entry.save(db)
+        }
+    }
+
+    func deleteFoodLogEntry(id: String) throws {
+        try dbWriter.write { db in
+            _ = try FoodLogEntry.deleteOne(db, key: id)
         }
     }
 }

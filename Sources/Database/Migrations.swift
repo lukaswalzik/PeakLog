@@ -177,6 +177,41 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v6_nutrition") { db in
+            try db.create(table: "food_items") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("brand", .text)
+                t.column("barcode", .text)
+                t.column("servingSizeGrams", .double).notNull().defaults(to: 100)
+                t.column("caloriesPer100g", .double).notNull()
+                t.column("proteinPer100g", .double).notNull()
+                t.column("carbsPer100g", .double).notNull()
+                t.column("fatPer100g", .double).notNull()
+                t.column("fiberPer100g", .double).notNull().defaults(to: 0)
+                t.column("sugarPer100g", .double).notNull().defaults(to: 0)
+                t.column("saltPer100g", .double).notNull().defaults(to: 0)
+                t.column("vitaminCMgPer100g", .double).notNull().defaults(to: 0)
+                t.column("calciumMgPer100g", .double).notNull().defaults(to: 0)
+                t.column("ironMgPer100g", .double).notNull().defaults(to: 0)
+                t.column("isCustom", .boolean).notNull().defaults(to: true)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "food_log_entries") { t in
+                t.column("id", .text).primaryKey()
+                t.column("foodItemId", .text).notNull().references("food_items", onDelete: .cascade)
+                t.column("loggedAt", .datetime).notNull()
+                t.column("mealType", .text).notNull()
+                t.column("grams", .double).notNull()
+            }
+
+            try db.create(index: "idx_food_items_barcode", on: "food_items", columns: ["barcode"])
+            try db.create(index: "idx_food_log_entries_loggedAt", on: "food_log_entries", columns: ["loggedAt"])
+
+            try SeedFoods.insertDefaultFoods(in: db)
+        }
+
         return migrator
     }
 }

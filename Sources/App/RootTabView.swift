@@ -3,6 +3,7 @@ import SwiftUI
 struct RootTabView: View {
     enum Tab: Hashable {
         case start
+        case nutrition
         case history
         case exercises
         case profile
@@ -21,6 +22,13 @@ struct RootTabView: View {
                         Label("Start", systemImage: "figure.strengthtraining.traditional")
                     }
                     .tag(Tab.start)
+
+                NutritionView()
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .tabItem {
+                        Label("Ernährung", systemImage: "fork.knife")
+                    }
+                    .tag(Tab.nutrition)
 
                 HistoryListView()
                     .toolbarBackground(.visible, for: .tabBar)
@@ -144,5 +152,7 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(HistoryStore(database: db))
             .environmentObject(BodyweightStore(database: db))
             .environmentObject(CardioStore(database: db))
+            .environmentObject(GymStore(database: db))
+            .environmentObject(NutritionStore(database: db))
     }
 }
