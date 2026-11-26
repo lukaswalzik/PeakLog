@@ -4,6 +4,7 @@ import UIKit
 struct ActiveWorkoutView: View {
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
     @EnvironmentObject private var restTimerManager: RestTimerManager
+    @EnvironmentObject private var gymStore: GymStore
 
     @State private var workoutName: String = ""
     @State private var workoutNotes: String = ""
@@ -224,9 +225,50 @@ struct ActiveWorkoutView: View {
                     activeWorkoutManager.updateHeader(name: workoutName, notes: newValue)
                 }
 
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 Label("\(detail.completedSetCount)/\(detail.totalSetCount) Sätze", systemImage: "checkmark.circle")
-                Label("\(Formatters.weight(detail.totalVolumeKg)) kg Volumen", systemImage: "scalemass")
+                Label("\(Formatters.weight(detail.totalVolumeKg)) kg", systemImage: "scalemass")
+
+                Spacer()
+
+                if !gymStore.gyms.isEmpty {
+                    Menu {
+                        Button {
+                            activeWorkoutManager.updateGym(gymId: nil)
+                        } label: {
+                            HStack {
+                                Text("Kein Gym")
+                                if detail.workout.gymId == nil {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        ForEach(gymStore.gyms) { gym in
+                            Button {
+                                activeWorkoutManager.updateGym(gymId: gym.id)
+                            } label: {
+                                HStack {
+                                    Text(gym.name)
+                                    if detail.workout.gymId == gym.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.and.ellipse")
+                            Text(detail.gymName ?? "Gym wählen")
+                        }
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.14))
+                        .foregroundColor(.accentColor)
+                        .clipShape(Capsule())
+                    }
+                }
             }
             .font(.caption)
             .foregroundColor(.secondary)

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryListView: View {
     @EnvironmentObject private var historyStore: HistoryStore
+    @EnvironmentObject private var gymStore: GymStore
 
     enum HistoryMode: String, CaseIterable, Identifiable {
         case strength = "Kraft"
@@ -11,7 +12,15 @@ struct HistoryListView: View {
     }
 
     @State private var selectedMode: HistoryMode = .strength
+    @State private var selectedGymFilterId: String? = nil
     @State private var workoutToDelete: WorkoutDetail? = nil
+
+    private var filteredWorkouts: [WorkoutDetail] {
+        guard let gymId = selectedGymFilterId else {
+            return historyStore.completedWorkouts
+        }
+        return historyStore.completedWorkouts.filter { $0.workout.gymId == gymId }
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,6 +36,9 @@ struct HistoryListView: View {
                 .background(Color(uiColor: .systemGroupedBackground))
 
                 if selectedMode == .strength {
+                    if !gymStore.gyms.isEmpty {
+                        gymFilterBar
+                    }
                     strengthHistoryContent
                 } else {
                     CardioOverviewView()
@@ -56,17 +68,51 @@ struct HistoryListView: View {
         }
     }
 
+    private var gymFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                gymChip(title: "Alle Gyms", isSelected: selectedGymFilterId == nil) {
+                    selectedGymFilterId = nil
+                }
+                ForEach(gymStore.gyms) { gym in
+                    gymChip(title: gym.name, isSelected: selectedGymFilterId == gym.id) {
+                        selectedGymFilterId = (selectedGymFilterId == gym.id) ? nil : gym.id
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private func gymChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(isSelected ? .semibold : .medium)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
+                .foregroundColor(isSelected ? .white : .primary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     private var strengthHistoryContent: some View {
-        if historyStore.completedWorkouts.isEmpty {
+        if filteredWorkouts.isEmpty {
             EmptyStateView(
                 systemImage: "clock.arrow.circlepath",
                 title: "Noch kein Verlauf",
-                message: "Sobald du dein erstes Workout abschließt, erscheint es hier mit Dauer, Volumen und Sätzen."
+                message: selectedGymFilterId == nil
+                    ? "Sobald du dein erstes Workout abschließt, erscheint es hier mit Dauer, Volumen und Sätzen."
+                    : "Für dieses Gym wurden noch keine Workouts abgeschlossen."
             )
         } else {
             List {
-                ForEach(historyStore.completedWorkouts) { detail in
+                ForEach(filteredWorkouts) { detail in
                     NavigationLink {
                         WorkoutDetailView(detail: detail)
                     } label: {
@@ -135,9 +181,23 @@ private struct HistoryRowView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(detail.workout.name)
-                    .font(.headline)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(detail.workout.name)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    if let gymName = detail.gymName {
+                        Label(gymName, systemImage: "mappin.and.ellipse")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.12))
+                            .foregroundColor(.accentColor)
+                            .clipShape(Capsule())
+                            .lineLimit(1)
+                    }
+                }
 
                 HStack(spacing: 10) {
                     Label(durationText, systemImage: "clock")

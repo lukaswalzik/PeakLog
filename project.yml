@@ -12,8 +12,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "3"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Manual
     CODE_SIGNING_ALLOWED: NO
@@ -27,6 +27,7 @@ targets:
     deploymentTarget: "16.5"
     sources:
       - path: Sources
+      - path: Resources/Assets.xcassets
       - path: Resources/ExerciseImages
         type: folder
     dependencies:
@@ -37,6 +38,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.strongtracker
         PRODUCT_NAME: StrongTracker
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: StrongTracker
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES

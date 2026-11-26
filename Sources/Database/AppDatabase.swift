@@ -172,13 +172,20 @@ extension AppDatabase {
         includePreviousSets: Bool,
         in db: Database
     ) throws -> WorkoutDetail {
+        let gymName: String?
+        if let gymId = workout.gymId {
+            gymName = try Gym.fetchOne(db, key: gymId)?.name
+        } else {
+            gymName = nil
+        }
+
         let workoutExercises = try WorkoutExercise
             .filter(WorkoutExercise.Columns.workoutId == workout.id)
             .order(WorkoutExercise.Columns.sortOrder.asc)
             .fetchAll(db)
 
         guard !workoutExercises.isEmpty else {
-            return WorkoutDetail(workout: workout, exercises: [])
+            return WorkoutDetail(workout: workout, gymName: gymName, exercises: [])
         }
 
         let exerciseIds = Set(workoutExercises.map { $0.exerciseId })
@@ -199,7 +206,12 @@ extension AppDatabase {
             let sets = setsByWorkoutExercise[we.id] ?? []
             let previousSets: [Int: PreviousSetReference]
             if includePreviousSets {
-                previousSets = try fetchPreviousSets(forExerciseId: we.exerciseId, excludingWorkoutId: workout.id, in: db)
+                previousSets = try fetchPreviousSets(
+                    forExerciseId: we.exerciseId,
+                    excludingWorkoutId: workout.id,
+                    preferredGymId: workout.gymId,
+                    in: db
+                )
             } else {
                 previousSets = [:]
             }
@@ -211,28 +223,52 @@ extension AppDatabase {
             )
         }
 
-        return WorkoutDetail(workout: workout, exercises: details)
+        return WorkoutDetail(workout: workout, gymName: gymName, exercises: details)
     }
 
     private static func fetchPreviousSets(
         forExerciseId exerciseId: String,
         excludingWorkoutId: String,
+        preferredGymId: String?,
         in db: Database
     ) throws -> [Int: PreviousSetReference] {
-        let previousWorkoutExerciseId = try String.fetchOne(
-            db,
-            sql: """
-                SELECT we.id
-                FROM workout_exercises we
-                JOIN workouts w ON w.id = we.workoutId
-                WHERE we.exerciseId = ?
-                  AND w.id != ?
-                  AND w.finishedAt IS NOT NULL
-                ORDER BY w.startedAt DESC
-                LIMIT 1
-                """,
-            arguments: [exerciseId, excludingWorkoutId]
-        )
+        var previousWorkoutExerciseId: String?
+
+        // Prefer the most recent completed session in the same gym (different machines/pulleys!)
+        if let gymId = preferredGymId {
+            previousWorkoutExerciseId = try String.fetchOne(
+                db,
+                sql: """
+                    SELECT we.id
+                    FROM workout_exercises we
+                    JOIN workouts w ON w.id = we.workoutId
+                    WHERE we.exerciseId = ?
+                      AND w.id != ?
+                      AND w.gymId = ?
+                      AND w.finishedAt IS NOT NULL
+                    ORDER BY w.startedAt DESC
+                    LIMIT 1
+                    """,
+                arguments: [exerciseId, excludingWorkoutId, gymId]
+            )
+        }
+
+        if previousWorkoutExerciseId == nil {
+            previousWorkoutExerciseId = try String.fetchOne(
+                db,
+                sql: """
+                    SELECT we.id
+                    FROM workout_exercises we
+                    JOIN workouts w ON w.id = we.workoutId
+                    WHERE we.exerciseId = ?
+                      AND w.id != ?
+                      AND w.finishedAt IS NOT NULL
+                    ORDER BY w.startedAt DESC
+                    LIMIT 1
+                    """,
+                arguments: [exerciseId, excludingWorkoutId]
+            )
+        }
 
         guard let prevWeId = previousWorkoutExerciseId else {
             return [:]
@@ -250,17 +286,18 @@ extension AppDatabase {
         return result
     }
 
-    func startEmptyWorkout(name: String = "Freies Training") throws -> String {
-        let workout = Workout(name: name, startedAt: Date(), finishedAt: nil)
+    func startEmptyWorkout(name: String = "Freies Training", gymId: String? = nil) throws -> String {
+        let workout = Workout(gymId: gymId, name: name, startedAt: Date(), finishedAt: nil)
         try dbWriter.write { db in
             try workout.insert(db)
         }
         return workout.id
     }
 
-    func startWorkout(from routineDetail: RoutineWithExercises) throws -> String {
+    func startWorkout(from routineDetail: RoutineWithExercises, gymId: String? = nil) throws -> String {
         let workout = Workout(
             routineId: routineDetail.routine.id,
+            gymId: gymId,
             name: routineDetail.routine.name,
             startedAt: Date(),
             finishedAt: nil,
@@ -626,7 +663,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 3,
+                schemaVersion: 4,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -636,7 +673,8 @@ extension AppDatabase {
                 workoutSets: try WorkoutSet.fetchAll(db),
                 bodyweightEntries: try BodyweightEntry.fetchAll(db),
                 bodyweightPhotos: try BodyweightPhoto.fetchAll(db),
-                cardioSessions: try CardioSession.fetchAll(db)
+                cardioSessions: try CardioSession.fetchAll(db),
+                gyms: try Gym.fetchAll(db)
             )
         }
     }
@@ -650,6 +688,7 @@ extension AppDatabase {
             try WorkoutSet.deleteAll(db)
             try WorkoutExercise.deleteAll(db)
             try Workout.deleteAll(db)
+            try Gym.deleteAll(db)
             try RoutineExercise.deleteAll(db)
             try Routine.deleteAll(db)
             try Exercise.deleteAll(db)
@@ -658,6 +697,7 @@ extension AppDatabase {
             for item in payload.exercises { try item.insert(db) }
             for item in payload.routines { try item.insert(db) }
             for item in payload.routineExercises { try item.insert(db) }
+            for item in payload.gyms ?? [] { try item.insert(db) }
             for item in payload.workouts { try item.insert(db) }
             for item in payload.workoutExercises { try item.insert(db) }
             for item in payload.workoutSets { try item.insert(db) }
@@ -735,6 +775,37 @@ extension AppDatabase {
     func deleteCardioSession(id: String) throws {
         try dbWriter.write { db in
             _ = try CardioSession.deleteOne(db, key: id)
+        }
+    }
+}
+
+// MARK: - Gym Operations
+
+extension AppDatabase {
+    static func fetchGyms(in db: Database) throws -> [Gym] {
+        try Gym
+            .order(Gym.Columns.sortOrder.asc, Gym.Columns.createdAt.asc)
+            .fetchAll(db)
+    }
+
+    func saveGym(_ gym: Gym) throws {
+        try dbWriter.write { db in
+            try gym.save(db)
+        }
+    }
+
+    func deleteGym(id: String) throws {
+        try dbWriter.write { db in
+            _ = try Gym.deleteOne(db, key: id)
+        }
+    }
+
+    func updateWorkoutGym(workoutId: String, gymId: String?) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE workouts SET gymId = ? WHERE id = ?",
+                arguments: [gymId, workoutId]
+            )
         }
     }
 }

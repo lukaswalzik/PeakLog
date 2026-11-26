@@ -157,6 +157,26 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v5_gyms") { db in
+            try db.create(table: "gyms") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("notes", .text)
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.alter(table: "workouts") { t in
+                t.add(column: "gymId", .text).references("gyms", onDelete: .setNull)
+            }
+
+            try db.create(
+                index: "idx_workouts_gymId",
+                on: "workouts",
+                columns: ["gymId"]
+            )
+        }
+
         return migrator
     }
 }

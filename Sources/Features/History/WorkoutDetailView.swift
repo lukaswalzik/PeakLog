@@ -59,9 +59,22 @@ struct WorkoutDetailView: View {
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(Formatters.workoutDate(detail.workout.startedAt))
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            HStack {
+                Text(Formatters.workoutDate(detail.workout.startedAt))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if let gymName = detail.gymName {
+                    Label(gymName, systemImage: "mappin.and.ellipse")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.14))
+                        .foregroundColor(.accentColor)
+                        .clipShape(Capsule())
+                }
+            }
 
             HStack(spacing: 12) {
                 MetricTile(title: "Dauer", value: durationText)

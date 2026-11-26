@@ -7,6 +7,7 @@ struct ProfileBackupView: View {
     @EnvironmentObject private var restTimerManager: RestTimerManager
     @EnvironmentObject private var bodyweightStore: BodyweightStore
     @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var gymStore: GymStore
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
     @State private var isShowingExporter: Bool = false
@@ -67,6 +68,28 @@ struct ProfileBackupView: View {
 
                 Section(header: Text("Fortschritt & Motivation")) {
                     NavigationLink {
+                        ProgressDashboardView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.title3)
+                                .foregroundColor(.blue)
+                                .frame(width: 40, height: 40)
+                                .background(Color.blue.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Fortschritt & Trends")
+                                    .font(.headline)
+                                Text("Kraftsteigerung & Gewichtsverlauf im Graph")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
                         MilestonesView()
                     } label: {
                         HStack(spacing: 12) {
@@ -119,6 +142,28 @@ struct ProfileBackupView: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
+                        GymsManagementView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.title3)
+                                .foregroundColor(.teal)
+                                .frame(width: 40, height: 40)
+                                .background(Color.teal.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Meine Gyms")
+                                    .font(.headline)
+                                Text(gymStore.gyms.isEmpty ? "Studios & Homegym anlegen" : "\(gymStore.gyms.count) Gyms · Aktiv: \(gymStore.selectedGym?.name ?? "Alle")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
                         .padding(.vertical, 4)

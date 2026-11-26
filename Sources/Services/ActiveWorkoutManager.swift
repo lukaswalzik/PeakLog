@@ -41,29 +41,38 @@ final class ActiveWorkoutManager: ObservableObject {
         )
     }
 
-    func startEmptyWorkout() {
+    func startEmptyWorkout(gymId: String? = nil) {
         guard activeWorkout == nil else {
             isPresentingSheet = true
             return
         }
         do {
-            _ = try database.startEmptyWorkout()
+            _ = try database.startEmptyWorkout(gymId: gymId)
             isPresentingSheet = true
         } catch {
             errorMessage = "Workout konnte nicht gestartet werden: \(error.localizedDescription)"
         }
     }
 
-    func startWorkout(from routine: RoutineWithExercises) {
+    func startWorkout(from routine: RoutineWithExercises, gymId: String? = nil) {
         guard activeWorkout == nil else {
             isPresentingSheet = true
             return
         }
         do {
-            _ = try database.startWorkout(from: routine)
+            _ = try database.startWorkout(from: routine, gymId: gymId)
             isPresentingSheet = true
         } catch {
             errorMessage = "Routine konnte nicht gestartet werden: \(error.localizedDescription)"
+        }
+    }
+
+    func updateGym(gymId: String?) {
+        guard let workoutId = activeWorkout?.workout.id else { return }
+        do {
+            try database.updateWorkoutGym(workoutId: workoutId, gymId: gymId)
+        } catch {
+            errorMessage = "Gym konnte nicht aktualisiert werden: \(error.localizedDescription)"
         }
     }
 

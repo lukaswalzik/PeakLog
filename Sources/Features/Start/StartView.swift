@@ -6,6 +6,7 @@ struct StartView: View {
     @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var bodyweightStore: BodyweightStore
+    @EnvironmentObject private var gymStore: GymStore
 
     @State private var isShowingCreateRoutine: Bool = false
     @State private var editingRoutine: RoutineWithExercises? = nil
@@ -13,6 +14,7 @@ struct StartView: View {
     @State private var isShowingAlreadyActiveAlert: Bool = false
     @State private var isShowingCardioForm: Bool = false
     @State private var isShowingLiveCardio: Bool = false
+    @State private var isShowingManageGyms: Bool = false
 
     private var progressSummary: UserProgressSummary {
         ProgressEngine.compute(
@@ -74,7 +76,7 @@ struct StartView: View {
                                     if activeWorkoutManager.hasActiveWorkout {
                                         isShowingAlreadyActiveAlert = true
                                     } else {
-                                        activeWorkoutManager.startWorkout(from: item)
+                                        activeWorkoutManager.startWorkout(from: item, gymId: gymStore.selectedGymId)
                                     }
                                 },
                                 onEdit: {
@@ -130,6 +132,16 @@ struct StartView: View {
             .sheet(isPresented: $isShowingLiveCardio) {
                 LiveCardioTimerView { session in
                     cardioStore.save(session)
+                }
+            }
+            .sheet(isPresented: $isShowingManageGyms) {
+                NavigationStack {
+                    GymsManagementView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Fertig") { isShowingManageGyms = false }
+                            }
+                        }
                 }
             }
             .alert(
@@ -217,6 +229,55 @@ struct StartView: View {
                 }
 
                 Spacer()
+
+                Menu {
+                    Button {
+                        gymStore.selectedGymId = nil
+                    } label: {
+                        HStack {
+                            Text("Kein bestimmtes Gym")
+                            if gymStore.selectedGymId == nil {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+
+                    if !gymStore.gyms.isEmpty {
+                        Divider()
+                        ForEach(gymStore.gyms) { gym in
+                            Button {
+                                gymStore.selectedGymId = gym.id
+                            } label: {
+                                HStack {
+                                    Text(gym.name)
+                                    if gymStore.selectedGymId == gym.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Divider()
+                    Button {
+                        isShowingManageGyms = true
+                    } label: {
+                        Label("Gyms verwalten…", systemImage: "plus.circle")
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.and.ellipse")
+                        Text(gymStore.selectedGym?.name ?? "Gym")
+                            .lineLimit(1)
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.20))
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+                }
             }
 
             HStack(spacing: 10) {
@@ -224,7 +285,7 @@ struct StartView: View {
                     if activeWorkoutManager.hasActiveWorkout {
                         isShowingAlreadyActiveAlert = true
                     } else {
-                        activeWorkoutManager.startEmptyWorkout()
+                        activeWorkoutManager.startEmptyWorkout(gymId: gymStore.selectedGymId)
                     }
                 } label: {
                     HStack(spacing: 6) {

@@ -33,6 +33,7 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
 
     var id: String
     var routineId: String?
+    var gymId: String?
     var name: String
     var startedAt: Date
     var finishedAt: Date?
@@ -41,6 +42,7 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
     enum Columns {
         static let id = Column(CodingKeys.id)
         static let routineId = Column(CodingKeys.routineId)
+        static let gymId = Column(CodingKeys.gymId)
         static let name = Column(CodingKeys.name)
         static let startedAt = Column(CodingKeys.startedAt)
         static let finishedAt = Column(CodingKeys.finishedAt)
@@ -50,6 +52,7 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
     init(
         id: String = UUID().uuidString,
         routineId: String? = nil,
+        gymId: String? = nil,
         name: String,
         startedAt: Date = Date(),
         finishedAt: Date? = nil,
@@ -57,6 +60,7 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
     ) {
         self.id = id
         self.routineId = routineId
+        self.gymId = gymId
         self.name = name
         self.startedAt = startedAt
         self.finishedAt = finishedAt
@@ -160,6 +164,7 @@ struct WorkoutExerciseDetail: Identifiable, Equatable, Hashable {
 
 struct WorkoutDetail: Identifiable, Equatable, Hashable {
     var workout: Workout
+    var gymName: String? = nil
     var exercises: [WorkoutExerciseDetail]
 
     var id: String { workout.id }
