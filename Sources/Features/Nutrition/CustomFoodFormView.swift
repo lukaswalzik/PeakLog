@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct CustomFoodFormView: View {
     @Environment(\.dismiss) private var dismiss
@@ -23,6 +25,11 @@ struct CustomFoodFormView: View {
     @State private var calciumText: String = ""
     @State private var ironText: String = ""
 
+    @State private var isShowingCamera: Bool = false
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var isScanningLabel: Bool = false
+    @State private var scanStatusMessage: String? = nil
+
     init(prefilledBarcode: String? = nil, onSave: @escaping (FoodItem) -> Void) {
         self.prefilledBarcode = prefilledBarcode
         self.onSave = onSave
@@ -37,6 +44,44 @@ struct CustomFoodFormView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if MistralAIService.shared.isConfigured {
+                    Section(
+                        header: Text("KI-Nährwerttabellen-Scanner"),
+                        footer: Text("Fotografiere die Nährwerttabelle auf der Verpackung – Mistral füllt alle Werte automatisch aus.")
+                    ) {
+                        HStack(spacing: 12) {
+                            Button {
+                                isShowingCamera = true
+                            } label: {
+                                Label("Kamera", systemImage: "camera.fill")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isScanningLabel)
+
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                Label("Foto wählen", systemImage: "photo")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isScanningLabel)
+
+                            if isScanningLabel {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+
+                        if let msg = scanStatusMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 Section(header: Text("Lebensmittel")) {
                     TextField("Name (z. B. Protein Pudding Schoko)", text: $name)
                     TextField("Marke (optional)", text: $brand)
@@ -82,6 +127,51 @@ struct CustomFoodFormView: View {
                     }
                     .disabled(!isValid)
                     .fontWeight(.semibold)
+                }
+            }
+            .sheet(isPresented: $isShowingCamera) {
+                CameraPickerView { image in
+                    scanLabelImage(image)
+                }
+            }
+            .onChange(of: selectedPhotoItem) { newItem in
+                guard let newItem = newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        await MainActor.run {
+                            scanLabelImage(image)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func scanLabelImage(_ image: UIImage) {
+        isScanningLabel = true
+        scanStatusMessage = "Mistral liest Nährwerttabelle..."
+        Task {
+            do {
+                let result = try await MistralAIService.shared.scanNutritionLabel(image)
+                await MainActor.run {
+                    if let n = result.name, !n.isEmpty, name.isEmpty { name = n }
+                    if let b = result.brand, !b.isEmpty, brand.isEmpty { brand = b }
+                    if let s = result.servingSizeGrams, s > 0 { servingGramsText = Formatters.weight(s) }
+                    if let v = result.caloriesPer100g { kcalText = Formatters.weight(v) }
+                    if let v = result.proteinPer100g { proteinText = Formatters.weight(v) }
+                    if let v = result.carbsPer100g { carbsText = Formatters.weight(v) }
+                    if let v = result.fatPer100g { fatText = Formatters.weight(v) }
+                    if let v = result.fiberPer100g { fiberText = Formatters.weight(v) }
+                    if let v = result.sugarPer100g { sugarText = Formatters.weight(v) }
+                    if let v = result.saltPer100g { saltText = Formatters.weight(v) }
+                    scanStatusMessage = "Werte erkannt! Bitte kurz prüfen & speichern."
+                    isScanningLabel = false
+                }
+            } catch {
+                await MainActor.run {
+                    scanStatusMessage = error.localizedDescription
+                    isScanningLabel = false
                 }
             }
         }

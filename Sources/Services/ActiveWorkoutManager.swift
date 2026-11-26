@@ -55,16 +55,33 @@ final class ActiveWorkoutManager: ObservableObject {
         }
     }
 
-    func startWorkout(from routine: RoutineWithExercises, gymId: String? = nil) {
+    func startWorkout(from routine: RoutineWithExercises, gymId: String? = nil, isDeload: Bool = false) {
         guard activeWorkout == nil else {
             isPresentingSheet = true
             return
         }
         do {
-            _ = try database.startWorkout(from: routine, gymId: gymId)
+            _ = try database.startWorkout(from: routine, gymId: gymId, isDeload: isDeload)
             isPresentingSheet = true
         } catch {
             errorMessage = "Routine konnte nicht gestartet werden: \(error.localizedDescription)"
+        }
+    }
+
+    func moveExercise(workoutExerciseId: String, direction: Int) {
+        guard let workoutId = activeWorkout?.workout.id else { return }
+        do {
+            try database.moveWorkoutExercise(workoutId: workoutId, workoutExerciseId: workoutExerciseId, direction: direction)
+        } catch {
+            errorMessage = "Übung konnte nicht verschoben werden: \(error.localizedDescription)"
+        }
+    }
+
+    func updateExerciseRestSeconds(workoutExerciseId: String, restSeconds: Int) {
+        do {
+            try database.updateWorkoutExerciseRestSeconds(workoutExerciseId: workoutExerciseId, restSeconds: restSeconds)
+        } catch {
+            errorMessage = "Pausenzeit konnte nicht geändert werden: \(error.localizedDescription)"
         }
     }
 

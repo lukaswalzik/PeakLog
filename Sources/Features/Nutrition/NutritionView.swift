@@ -14,6 +14,8 @@ struct NutritionView: View {
     @State private var isShowingAdaptiveTDEE: Bool = false
     @State private var isShowingMacroHelper: Bool = false
     @State private var isShowingAIScanner: Bool = false
+    @State private var isShowingRecipeChef: Bool = false
+    @State private var isShowingDayTemplates: Bool = false
     @State private var showMicrosExpanded: Bool = false
     @State private var showWeeklyTrendExpanded: Bool = false
     @State private var mealToSaveAsTemplate: MealType? = nil
@@ -135,6 +137,18 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $isShowingAIScanner) {
                 AIMealScannerSheetView(initialMealType: defaultMealForCurrentHour())
+            }
+            .sheet(isPresented: $isShowingRecipeChef) {
+                AIRecipeChefSheetView(
+                    remainingCalories: remainingCalories,
+                    remainingProtein: goals.targetProteinGrams - Int(round(totals.protein)),
+                    remainingCarbs: effectiveTargetCarbs - Int(round(totals.carbs)),
+                    remainingFat: goals.targetFatGrams - Int(round(totals.fat)),
+                    defaultMealType: defaultMealForCurrentHour()
+                )
+            }
+            .sheet(isPresented: $isShowingDayTemplates) {
+                DayTemplatesSheetView()
             }
             .sheet(isPresented: $isShowingMacroHelper) {
                 MacroHelperSheetView(
@@ -310,27 +324,54 @@ struct NutritionView: View {
                 )
             }
 
-            Button {
-                isShowingAIScanner = true
-            } label: {
-                Label("KI-Scanner (Foto oder Text)", systemImage: "sparkles")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 5)
+            HStack(spacing: 8) {
+                Button {
+                    isShowingAIScanner = true
+                } label: {
+                    Label("KI-Scanner", systemImage: "sparkles")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+                Button {
+                    isShowingRecipeChef = true
+                } label: {
+                    Label("KI-Makro-Koch", systemImage: "flame.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .controlSize(.small)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
 
             HStack(spacing: 8) {
                 Button {
                     isShowingMacroHelper = true
                 } label: {
-                    Label("Was fehlt noch?", systemImage: "wand.and.stars")
+                    Label("Was fehlt?", systemImage: "wand.and.stars")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 5)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    isShowingDayTemplates = true
+                } label: {
+                    Label("Tages-Vorlagen", systemImage: "doc.on.doc")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -338,11 +379,11 @@ struct NutritionView: View {
                 Button {
                     isShowingAdaptiveTDEE = true
                 } label: {
-                    Label("Adaptiver TDEE", systemImage: "waveform.path.ecg")
+                    Label("TDEE", systemImage: "waveform.path.ecg")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 5)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)

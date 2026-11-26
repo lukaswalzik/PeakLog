@@ -320,6 +320,33 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v11_neck_and_day_templates") { db in
+            try db.alter(table: "body_measurements") { t in
+                t.add(column: "neckCm", .double)
+            }
+
+            try db.create(table: "day_templates") { t in
+                t.column("id", .text).primaryKey()
+                t.column("name", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "day_template_items") { t in
+                t.column("id", .text).primaryKey()
+                t.column("templateId", .text).notNull().references("day_templates", onDelete: .cascade)
+                t.column("foodItemId", .text).notNull().references("food_items", onDelete: .cascade)
+                t.column("mealType", .text).notNull()
+                t.column("grams", .double).notNull()
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+            }
+
+            try db.create(
+                index: "idx_day_template_items_templateId",
+                on: "day_template_items",
+                columns: ["templateId", "sortOrder"]
+            )
+        }
+
         return migrator
     }
 }

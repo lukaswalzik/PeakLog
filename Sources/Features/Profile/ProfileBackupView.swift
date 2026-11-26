@@ -92,6 +92,28 @@ struct ProfileBackupView: View {
                     }
 
                     NavigationLink {
+                        AIPlanGeneratorView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.title3)
+                                .foregroundColor(.purple)
+                                .frame(width: 40, height: 40)
+                                .background(Color.purple.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("KI-Trainingsplan-Generator")
+                                    .font(.headline)
+                                Text("Plan erstellen & mit 1 Tap als Routinen speichern")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
                         MistralSettingsView()
                     } label: {
                         HStack(spacing: 12) {
@@ -115,6 +137,49 @@ struct ProfileBackupView: View {
                 }
 
                 Section(header: Text("Fortschritt & Motivation")) {
+                    NavigationLink {
+                        WrappedSummaryView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trophy.fill")
+                                .font(.title3)
+                                .foregroundColor(.yellow)
+                                .frame(width: 40, height: 40)
+                                .background(Color.yellow.opacity(0.16))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("StrongTracker Wrapped")
+                                    .font(.headline)
+                                Text("Monats- & Jahresrückblick, bewegte Tonnen & Highlights")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
+                        RemindersSettingsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bell.badge.fill")
+                                .font(.title3)
+                                .foregroundColor(.red)
+                                .frame(width: 40, height: 40)
+                                .background(Color.red.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Erinnerungen")
+                                    .font(.headline)
+                                Text("Tägliche lokale Checks für Supplements, Wasser & Gym")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
                     NavigationLink {
                         ProgressDashboardView()
                     } label: {

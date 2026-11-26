@@ -83,7 +83,14 @@ struct StartView: View {
                                     if activeWorkoutManager.hasActiveWorkout {
                                         isShowingAlreadyActiveAlert = true
                                     } else {
-                                        activeWorkoutManager.startWorkout(from: item, gymId: gymStore.selectedGymId)
+                                        activeWorkoutManager.startWorkout(from: item, gymId: gymStore.selectedGymId, isDeload: false)
+                                    }
+                                },
+                                onStartDeload: {
+                                    if activeWorkoutManager.hasActiveWorkout {
+                                        isShowingAlreadyActiveAlert = true
+                                    } else {
+                                        activeWorkoutManager.startWorkout(from: item, gymId: gymStore.selectedGymId, isDeload: true)
                                     }
                                 },
                                 onEdit: {
@@ -435,6 +442,7 @@ struct StartView: View {
 private struct RoutineCardRow: View {
     let item: RoutineWithExercises
     let onStart: () -> Void
+    let onStartDeload: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
 
@@ -464,6 +472,12 @@ private struct RoutineCardRow: View {
                 Spacer()
 
                 Menu {
+                    Button {
+                        onStartDeload()
+                    } label: {
+                        Label("Als Deload starten (−20 %)", systemImage: "battery.75")
+                    }
+                    Divider()
                     Button {
                         onEdit()
                     } label: {

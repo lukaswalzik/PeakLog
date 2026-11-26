@@ -3,6 +3,8 @@ import SwiftUI
 
 struct BodyMeasurementsView: View {
     @EnvironmentObject private var wellnessStore: WellnessStore
+    @EnvironmentObject private var bodyweightStore: BodyweightStore
+    @EnvironmentObject private var nutritionStore: NutritionStore
 
     enum Metric: String, CaseIterable, Identifiable {
         case waist = "Taille"
@@ -43,9 +45,29 @@ struct BodyMeasurementsView: View {
             }
     }
 
+    private var latestUSNavyEstimate: (bfPercent: Double, leanMassKg: Double, ffmi: Double)? {
+        guard let latestWithNavy = wellnessStore.measurements.first(where: { $0.waistCm != nil && $0.neckCm != nil }),
+              let waist = latestWithNavy.waistCm,
+              let neck = latestWithNavy.neckCm,
+              waist > neck + 2 else {
+            return nil
+        }
+        let heightCm = Double(max(130, nutritionStore.goals.heightCm))
+        let weightKg = bodyweightStore.latestEntry?.entry.weightKg ?? nutritionStore.goals.weightKg
+        let denom = 1.0324 - 0.19077 * log10(waist - neck) + 0.15456 * log10(heightCm)
+        guard denom > 0 else { return nil }
+        let rawBF = (495.0 / denom) - 450.0
+        let bf = max(4.0, min(45.0, rawBF))
+        let lbm = weightKg * (1.0 - bf / 100.0)
+        let heightM = heightCm / 100.0
+        let ffmi = lbm / (heightM * heightM)
+        return (bf, lbm, ffmi)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                usNavyBodyFatCard
                 chartCard
                 entriesSection
             }
@@ -70,6 +92,68 @@ struct BodyMeasurementsView: View {
                 wellnessStore.saveMeasurement(measurement)
             }
         }
+    }
+
+    private var usNavyBodyFatCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Körperfett (US-Navy) & FFMI", systemImage: "figure.arms.open")
+                    .font(.headline)
+                Spacer()
+            }
+
+            if let est = latestUSNavyEstimate {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("KFA (ca.)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("\(String(format: "%.1f", est.bfPercent)) %")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color.blue.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Magermasse")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("\(Formatters.weight(est.leanMassKg)) kg")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color.green.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("FFMI")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(String(format: "%.1f", est.ffmi))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.purple)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color.purple.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            } else {
+                Text("Trage bei einer Messung **Taille** und **Nacken** ein, um automatisch deinen geschätzten Körperfettanteil (US-Navy), deine fettfreie Muskelmasse und deinen FFMI zu berechnen.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard()
     }
 
     private var chartCard: some View {
@@ -122,7 +206,7 @@ struct BodyMeasurementsView: View {
                 EmptyStateView(
                     systemImage: "ruler",
                     title: "Noch keine Messungen",
-                    message: "Halte Brust, Taille, Oberarm & Oberschenkel fest – ideal bei Recomp & Muskelaufbau.",
+                    message: "Halte Brust, Taille, Nacken, Oberarm & Oberschenkel fest – ideal bei Recomp & Muskelaufbau.",
                     actionTitle: "Erste Messung eintragen"
                 ) {
                     isShowingAddSheet = true
@@ -145,11 +229,14 @@ struct BodyMeasurementsView: View {
                             .buttonStyle(.plain)
                         }
 
-                        HStack(spacing: 10) {
-                            if let v = item.chestCm { measureBadge("Brust", v, .blue) }
-                            if let v = item.waistCm { measureBadge("Taille", v, .green) }
-                            if let v = item.armCm { measureBadge("Arm", v, .purple) }
-                            if let v = item.thighCm { measureBadge("Bein", v, .orange) }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                if let v = item.chestCm { measureBadge("Brust", v, .blue) }
+                                if let v = item.waistCm { measureBadge("Taille", v, .green) }
+                                if let v = item.neckCm { measureBadge("Nacken", v, .teal) }
+                                if let v = item.armCm { measureBadge("Arm", v, .purple) }
+                                if let v = item.thighCm { measureBadge("Bein", v, .orange) }
+                            }
                         }
 
                         if let notes = item.notes, !notes.isEmpty {
@@ -190,6 +277,7 @@ private struct BodyMeasurementFormView: View {
     @State private var recordedAt: Date = Date()
     @State private var chestText: String = ""
     @State private var waistText: String = ""
+    @State private var neckText: String = ""
     @State private var armText: String = ""
     @State private var thighText: String = ""
     @State private var notes: String = ""
@@ -197,6 +285,7 @@ private struct BodyMeasurementFormView: View {
     private var hasAnyValue: Bool {
         Formatters.parseWeight(chestText) != nil
             || Formatters.parseWeight(waistText) != nil
+            || Formatters.parseWeight(neckText) != nil
             || Formatters.parseWeight(armText) != nil
             || Formatters.parseWeight(thighText) != nil
     }
@@ -208,9 +297,13 @@ private struct BodyMeasurementFormView: View {
                     DatePicker("Gemessen am", selection: $recordedAt, displayedComponents: [.date])
                 }
 
-                Section(header: Text("Umfänge (cm, optional)")) {
+                Section(
+                    header: Text("Umfänge (cm, optional)"),
+                    footer: Text("Taille + Nacken aktivieren automatisch die US-Navy Körperfett- & FFMI-Berechnung.")
+                ) {
                     field("Brust", text: $chestText, placeholder: "z. B. 108")
-                    field("Taille", text: $waistText, placeholder: "z. B. 84")
+                    field("Taille (Bauchnabel)", text: $waistText, placeholder: "z. B. 84")
+                    field("Nacken", text: $neckText, placeholder: "z. B. 40")
                     field("Oberarm", text: $armText, placeholder: "z. B. 40,5")
                     field("Oberschenkel", text: $thighText, placeholder: "z. B. 62")
                 }
@@ -235,6 +328,7 @@ private struct BodyMeasurementFormView: View {
                             waistCm: Formatters.parseWeight(waistText),
                             armCm: Formatters.parseWeight(armText),
                             thighCm: Formatters.parseWeight(thighText),
+                            neckCm: Formatters.parseWeight(neckText),
                             notes: trimmedNotes.isEmpty ? nil : trimmedNotes
                         )
                         onSave(measurement)

@@ -11,6 +11,7 @@ final class NutritionStore: ObservableObject {
     }
     @Published private(set) var foodItems: [FoodItem] = []
     @Published private(set) var savedMeals: [SavedMealWithItems] = []
+    @Published private(set) var dayTemplates: [DayTemplateWithItems] = []
     @Published private(set) var dayEntries: [FoodLogEntryDetail] = []
     @Published private(set) var weeklyPoints: [DailyNutritionPoint] = []
     @Published private(set) var monthlyPoints: [DailyNutritionPoint] = []
@@ -25,6 +26,7 @@ final class NutritionStore: ObservableObject {
     private let database: AppDatabase
     private var foodsCancellable: AnyDatabaseCancellable?
     private var mealsCancellable: AnyDatabaseCancellable?
+    private var dayTemplatesCancellable: AnyDatabaseCancellable?
     private var dayCancellable: AnyDatabaseCancellable?
     private var weeklyCancellable: AnyDatabaseCancellable?
     private var monthlyCancellable: AnyDatabaseCancellable?
@@ -41,6 +43,7 @@ final class NutritionStore: ObservableObject {
         }
         startFoodsObservation()
         startSavedMealsObservation()
+        startDayTemplatesObservation()
         startDayObservation(for: selectedDate)
         startWeeklyObservation()
         startMonthlyObservation()
@@ -274,6 +277,44 @@ final class NutritionStore: ObservableObject {
         } catch {
             errorMessage = "Mahlzeit konnte nicht kopiert werden: \(error.localizedDescription)"
             return 0
+        }
+    }
+
+    private func startDayTemplatesObservation() {
+        let observation = ValueObservation.tracking { db in
+            try AppDatabase.fetchDayTemplatesWithItems(in: db)
+        }
+        dayTemplatesCancellable = observation.start(
+            in: database.dbWriter,
+            scheduling: .async(onQueue: .main),
+            onError: { _ in },
+            onChange: { [weak self] templates in
+                self?.dayTemplates = templates
+            }
+        )
+    }
+
+    func saveCurrentDayAsTemplate(name: String) {
+        do {
+            try database.saveDayTemplate(name: name, fromEntries: dayEntries)
+        } catch {
+            errorMessage = "Tages-Vorlage konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    func applyDayTemplate(_ template: DayTemplateWithItems) {
+        do {
+            try database.applyDayTemplate(template, toDay: selectedDate)
+        } catch {
+            errorMessage = "Tages-Vorlage konnte nicht geladen werden: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteDayTemplate(id: String) {
+        do {
+            try database.deleteDayTemplate(id: id)
+        } catch {
+            errorMessage = "Tages-Vorlage konnte nicht gelöscht werden: \(error.localizedDescription)"
         }
     }
 }

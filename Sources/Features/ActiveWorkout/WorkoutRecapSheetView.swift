@@ -9,6 +9,9 @@ struct WorkoutRecapSheetView: View {
 
     let recap: CompletedWorkoutRecap
     @State private var renderedShareImage: UIImage? = nil
+    @State private var aiFeedback: String? = nil
+    @State private var isLoadingFeedback: Bool = false
+    @State private var feedbackError: String? = nil
 
     private var progress: UserProgressSummary {
         ProgressEngine.compute(
@@ -31,6 +34,45 @@ struct WorkoutRecapSheetView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     recapCardView
+
+                    if MistralAIService.shared.isConfigured {
+                        if let feedback = aiFeedback {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Mistral KI-Feedback", systemImage: "sparkles")
+                                    .font(.headline)
+                                    .foregroundColor(.accentColor)
+                                Text(feedback)
+                                    .font(.subheadline)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .strongCard()
+                        } else {
+                            Button {
+                                loadAIFeedback()
+                            } label: {
+                                HStack {
+                                    if isLoadingFeedback {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "sparkles")
+                                    }
+                                    Text(isLoadingFeedback ? "Mistral analysiert Workout..." : "KI-Feedback zum Training")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isLoadingFeedback)
+                        }
+
+                        if let err = feedbackError {
+                            Text(err)
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    }
 
                     if let image = renderedShareImage {
                         ShareLink(
@@ -194,5 +236,24 @@ struct WorkoutRecapSheetView: View {
         )
         renderer.scale = 3.0
         renderedShareImage = renderer.uiImage
+    }
+
+    private func loadAIFeedback() {
+        isLoadingFeedback = true
+        feedbackError = nil
+        Task {
+            do {
+                let text = try await MistralAIService.shared.generateWorkoutFeedback(recap: recap)
+                await MainActor.run {
+                    aiFeedback = text
+                    isLoadingFeedback = false
+                }
+            } catch {
+                await MainActor.run {
+                    feedbackError = error.localizedDescription
+                    isLoadingFeedback = false
+                }
+            }
+        }
     }
 }

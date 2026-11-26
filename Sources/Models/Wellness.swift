@@ -80,7 +80,12 @@ struct BodyMeasurement: Identifiable, Equatable, Hashable, Codable, FetchableRec
     var waistCm: Double?
     var armCm: Double?
     var thighCm: Double?
+    var neckCm: Double?
     var notes: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, recordedAt, chestCm, waistCm, armCm, thighCm, neckCm, notes
+    }
 
     enum Columns {
         static let id = Column(CodingKeys.id)
@@ -89,6 +94,7 @@ struct BodyMeasurement: Identifiable, Equatable, Hashable, Codable, FetchableRec
         static let waistCm = Column(CodingKeys.waistCm)
         static let armCm = Column(CodingKeys.armCm)
         static let thighCm = Column(CodingKeys.thighCm)
+        static let neckCm = Column(CodingKeys.neckCm)
         static let notes = Column(CodingKeys.notes)
     }
 
@@ -99,6 +105,7 @@ struct BodyMeasurement: Identifiable, Equatable, Hashable, Codable, FetchableRec
         waistCm: Double? = nil,
         armCm: Double? = nil,
         thighCm: Double? = nil,
+        neckCm: Double? = nil,
         notes: String? = nil
     ) {
         self.id = id
@@ -107,7 +114,20 @@ struct BodyMeasurement: Identifiable, Equatable, Hashable, Codable, FetchableRec
         self.waistCm = waistCm
         self.armCm = armCm
         self.thighCm = thighCm
+        self.neckCm = neckCm
         self.notes = notes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        recordedAt = try c.decode(Date.self, forKey: .recordedAt)
+        chestCm = try c.decodeIfPresent(Double.self, forKey: .chestCm)
+        waistCm = try c.decodeIfPresent(Double.self, forKey: .waistCm)
+        armCm = try c.decodeIfPresent(Double.self, forKey: .armCm)
+        thighCm = try c.decodeIfPresent(Double.self, forKey: .thighCm)
+        neckCm = try c.decodeIfPresent(Double.self, forKey: .neckCm)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
     }
 }
 

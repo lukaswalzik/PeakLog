@@ -238,6 +238,81 @@ struct SavedMealWithItems: Identifiable, Equatable, Hashable {
     var totalFat: Double { items.reduce(0) { $0 + $1.fat } }
 }
 
+struct DayTemplate: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "day_templates"
+
+    var id: String
+    var name: String
+    var createdAt: Date
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let name = Column(CodingKeys.name)
+        static let createdAt = Column(CodingKeys.createdAt)
+    }
+
+    init(id: String = UUID().uuidString, name: String, createdAt: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+
+struct DayTemplateItem: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "day_template_items"
+
+    var id: String
+    var templateId: String
+    var foodItemId: String
+    var mealType: MealType
+    var grams: Double
+    var sortOrder: Int
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let templateId = Column(CodingKeys.templateId)
+        static let foodItemId = Column(CodingKeys.foodItemId)
+        static let mealType = Column(CodingKeys.mealType)
+        static let grams = Column(CodingKeys.grams)
+        static let sortOrder = Column(CodingKeys.sortOrder)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        templateId: String,
+        foodItemId: String,
+        mealType: MealType,
+        grams: Double,
+        sortOrder: Int = 0
+    ) {
+        self.id = id
+        self.templateId = templateId
+        self.foodItemId = foodItemId
+        self.mealType = mealType
+        self.grams = grams
+        self.sortOrder = sortOrder
+    }
+}
+
+struct DayTemplateItemDetail: Identifiable, Equatable, Hashable {
+    var item: DayTemplateItem
+    var food: FoodItem
+
+    var id: String { item.id }
+    private var factor: Double { item.grams / 100.0 }
+    var calories: Double { food.caloriesPer100g * factor }
+    var protein: Double { food.proteinPer100g * factor }
+}
+
+struct DayTemplateWithItems: Identifiable, Equatable, Hashable {
+    var template: DayTemplate
+    var items: [DayTemplateItemDetail]
+
+    var id: String { template.id }
+    var totalCalories: Double { items.reduce(0) { $0 + $1.calories } }
+    var totalProtein: Double { items.reduce(0) { $0 + $1.protein } }
+}
+
 struct FoodLogEntry: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "food_log_entries"
 

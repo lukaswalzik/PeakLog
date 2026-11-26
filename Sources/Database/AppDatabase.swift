@@ -490,14 +490,19 @@ extension AppDatabase {
         return workout.id
     }
 
-    func startWorkout(from routineDetail: RoutineWithExercises, gymId: String? = nil) throws -> String {
+    func startWorkout(
+        from routineDetail: RoutineWithExercises,
+        gymId: String? = nil,
+        isDeload: Bool = false
+    ) throws -> String {
+        let workoutName = isDeload ? "\(routineDetail.routine.name) (Deload)" : routineDetail.routine.name
         let workout = Workout(
             routineId: routineDetail.routine.id,
             gymId: gymId,
-            name: routineDetail.routine.name,
+            name: workoutName,
             startedAt: Date(),
             finishedAt: nil,
-            notes: routineDetail.routine.notes
+            notes: isDeload ? "Deload-Einheit (−20 % Gewicht, reduziertes Volumen)" : routineDetail.routine.notes
         )
 
         try dbWriter.write { db in
@@ -513,14 +518,34 @@ extension AppDatabase {
                 )
                 try we.insert(db)
 
-                let setCount = max(1, item.routineExercise.targetSets)
+                let baseSets = max(1, item.routineExercise.targetSets)
+                let setCount = isDeload ? max(1, baseSets - 1) : baseSets
+
+                var prevSets: [Int: PreviousSetReference] = [:]
+                if isDeload {
+                    prevSets = try Self.fetchPreviousSets(
+                        forExerciseId: item.exercise.id,
+                        excludingWorkoutId: workout.id,
+                        preferredGymId: gymId,
+                        in: db
+                    )
+                }
+
                 for setIndex in 1...setCount {
+                    var deloadWeight: Double? = nil
+                    var deloadReps: Int? = nil
+                    if isDeload, let prev = prevSets[setIndex] ?? prevSets[1] {
+                        if let w = prev.weightKg, w > 0 {
+                            deloadWeight = max(2.5, ((w * 0.8) / 2.5).rounded() * 2.5)
+                        }
+                        deloadReps = prev.reps
+                    }
                     let set = WorkoutSet(
                         workoutExerciseId: we.id,
                         setOrder: setIndex,
                         setType: .normal,
-                        weightKg: nil,
-                        reps: nil,
+                        weightKg: deloadWeight,
+                        reps: deloadReps,
                         isCompleted: false,
                         completedAt: nil
                     )
@@ -529,6 +554,39 @@ extension AppDatabase {
             }
         }
         return workout.id
+    }
+
+    func moveWorkoutExercise(workoutId: String, workoutExerciseId: String, direction: Int) throws {
+        try dbWriter.write { db in
+            let exercises = try WorkoutExercise
+                .filter(WorkoutExercise.Columns.workoutId == workoutId)
+                .order(WorkoutExercise.Columns.sortOrder.asc)
+                .fetchAll(db)
+
+            guard let currentIndex = exercises.firstIndex(where: { $0.id == workoutExerciseId }) else { return }
+            let targetIndex = currentIndex + direction
+            guard targetIndex >= 0 && targetIndex < exercises.count else { return }
+
+            var reordered = exercises
+            let item = reordered.remove(at: currentIndex)
+            reordered.insert(item, at: targetIndex)
+
+            for (idx, ex) in reordered.enumerated() {
+                try db.execute(
+                    sql: "UPDATE workout_exercises SET sortOrder = ? WHERE id = ?",
+                    arguments: [idx, ex.id]
+                )
+            }
+        }
+    }
+
+    func updateWorkoutExerciseRestSeconds(workoutExerciseId: String, restSeconds: Int) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE workout_exercises SET restSeconds = ? WHERE id = ?",
+                arguments: [max(15, restSeconds), workoutExerciseId]
+            )
+        }
     }
 
     func addExercisesToWorkout(workoutId: String, exercises: [Exercise]) throws {
@@ -921,7 +979,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 8,
+                schemaVersion: 9,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -942,7 +1000,9 @@ extension AppDatabase {
                 supplementLogs: try SupplementLog.fetchAll(db),
                 bodyMeasurements: try BodyMeasurement.fetchAll(db),
                 readinessLogs: try ReadinessLog.fetchAll(db),
-                exerciseGymNotes: try ExerciseGymNote.fetchAll(db)
+                exerciseGymNotes: try ExerciseGymNote.fetchAll(db),
+                dayTemplates: try DayTemplate.fetchAll(db),
+                dayTemplateItems: try DayTemplateItem.fetchAll(db)
             )
         }
     }
@@ -950,6 +1010,8 @@ extension AppDatabase {
     func importBackupPayload(_ payload: BackupPayload) throws {
         try dbWriter.write { db in
             // Delete in reverse foreign-key dependency order
+            try DayTemplateItem.deleteAll(db)
+            try DayTemplate.deleteAll(db)
             try ExerciseGymNote.deleteAll(db)
             try ReadinessLog.deleteAll(db)
             try BodyMeasurement.deleteAll(db)
@@ -996,6 +1058,8 @@ extension AppDatabase {
             for item in payload.bodyMeasurements ?? [] { try item.insert(db) }
             for item in payload.readinessLogs ?? [] { try item.insert(db) }
             for item in payload.exerciseGymNotes ?? [] { try item.insert(db) }
+            for item in payload.dayTemplates ?? [] { try item.insert(db) }
+            for item in payload.dayTemplateItems ?? [] { try item.insert(db) }
         }
     }
 }
@@ -1405,6 +1469,79 @@ extension AppDatabase {
     func deleteReadinessLog(id: String) throws {
         try dbWriter.write { db in
             _ = try ReadinessLog.deleteOne(db, key: id)
+        }
+    }
+}
+
+// MARK: - Day Template Operations
+
+extension AppDatabase {
+    static func fetchDayTemplatesWithItems(in db: Database) throws -> [DayTemplateWithItems] {
+        let templates = try DayTemplate
+            .order(DayTemplate.Columns.createdAt.desc)
+            .fetchAll(db)
+        guard !templates.isEmpty else { return [] }
+
+        let allItems = try DayTemplateItem
+            .order(DayTemplateItem.Columns.sortOrder.asc)
+            .fetchAll(db)
+
+        let foodIds = Set(allItems.map { $0.foodItemId })
+        let foodsById: [String: FoodItem]
+        if foodIds.isEmpty {
+            foodsById = [:]
+        } else {
+            let foods = try FoodItem.filter(foodIds.contains(FoodItem.Columns.id)).fetchAll(db)
+            foodsById = Dictionary(uniqueKeysWithValues: foods.map { ($0.id, $0) })
+        }
+
+        let grouped = Dictionary(grouping: allItems, by: { $0.templateId })
+        return templates.map { tpl in
+            let details = (grouped[tpl.id] ?? []).compactMap { item -> DayTemplateItemDetail? in
+                guard let food = foodsById[item.foodItemId] else { return nil }
+                return DayTemplateItemDetail(item: item, food: food)
+            }
+            return DayTemplateWithItems(template: tpl, items: details)
+        }
+    }
+
+    func saveDayTemplate(name: String, fromEntries entries: [FoodLogEntryDetail]) throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !entries.isEmpty else { return }
+
+        let template = DayTemplate(name: trimmed)
+        try dbWriter.write { db in
+            try template.insert(db)
+            for (idx, detail) in entries.enumerated() {
+                let item = DayTemplateItem(
+                    templateId: template.id,
+                    foodItemId: detail.food.id,
+                    mealType: detail.entry.mealType,
+                    grams: detail.entry.grams,
+                    sortOrder: idx
+                )
+                try item.insert(db)
+            }
+        }
+    }
+
+    func applyDayTemplate(_ template: DayTemplateWithItems, toDay date: Date) throws {
+        try dbWriter.write { db in
+            for detail in template.items {
+                let entry = FoodLogEntry(
+                    foodItemId: detail.food.id,
+                    loggedAt: date,
+                    mealType: detail.item.mealType,
+                    grams: detail.item.grams
+                )
+                try entry.insert(db)
+            }
+        }
+    }
+
+    func deleteDayTemplate(id: String) throws {
+        try dbWriter.write { db in
+            _ = try DayTemplate.deleteOne(db, key: id)
         }
     }
 }

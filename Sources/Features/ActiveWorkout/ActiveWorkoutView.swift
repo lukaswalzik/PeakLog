@@ -384,6 +384,32 @@ struct ActiveWorkoutView: View {
                         Label("Übung ersetzen (besetzt)", systemImage: "arrow.triangle.2.circlepath")
                     }
 
+                    Menu {
+                        Button("45 Sekunden") { activeWorkoutManager.updateExerciseRestSeconds(workoutExerciseId: exerciseDetail.id, restSeconds: 45) }
+                        Button("60 Sekunden") { activeWorkoutManager.updateExerciseRestSeconds(workoutExerciseId: exerciseDetail.id, restSeconds: 60) }
+                        Button("90 Sekunden") { activeWorkoutManager.updateExerciseRestSeconds(workoutExerciseId: exerciseDetail.id, restSeconds: 90) }
+                        Button("2 Minuten") { activeWorkoutManager.updateExerciseRestSeconds(workoutExerciseId: exerciseDetail.id, restSeconds: 120) }
+                        Button("3 Minuten") { activeWorkoutManager.updateExerciseRestSeconds(workoutExerciseId: exerciseDetail.id, restSeconds: 180) }
+                        Button("4 Minuten") { activeWorkoutManager.updateExerciseRestSeconds(workoutExerciseId: exerciseDetail.id, restSeconds: 240) }
+                    } label: {
+                        Label("Pausenzeit ändern", systemImage: "timer")
+                    }
+
+                    if let idx = currentIndex, idx > 0 {
+                        Button {
+                            activeWorkoutManager.moveExercise(workoutExerciseId: exerciseDetail.id, direction: -1)
+                        } label: {
+                            Label("Nach oben verschieben", systemImage: "arrow.up")
+                        }
+                    }
+                    if hasNextExercise {
+                        Button {
+                            activeWorkoutManager.moveExercise(workoutExerciseId: exerciseDetail.id, direction: 1)
+                        } label: {
+                            Label("Nach unten verschieben", systemImage: "arrow.down")
+                        }
+                    }
+
                     Divider()
 
                     if hasNextExercise {

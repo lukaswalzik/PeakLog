@@ -377,6 +377,290 @@ final class MistralAIService: ObservableObject {
         return content
     }
 
+    // MARK: - AI Training Plan Generator
+
+    struct AIGeneratedExerciseSpec: Identifiable, Decodable {
+        var id: String = UUID().uuidString
+        let exerciseName: String
+        let targetSets: Int
+        let targetReps: Int
+        let restSeconds: Int
+
+        enum CodingKeys: String, CodingKey {
+            case exerciseName, targetSets, targetReps, restSeconds
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = UUID().uuidString
+            exerciseName = try c.decode(String.self, forKey: .exerciseName)
+            targetSets = max(1, min(8, (try? c.decode(Int.self, forKey: .targetSets)) ?? 3))
+            targetReps = max(3, min(30, (try? c.decode(Int.self, forKey: .targetReps)) ?? 10))
+            restSeconds = max(30, min(300, (try? c.decode(Int.self, forKey: .restSeconds)) ?? 90))
+        }
+    }
+
+    struct AIGeneratedRoutine: Identifiable, Decodable {
+        var id: String = UUID().uuidString
+        let name: String
+        let notes: String?
+        let exercises: [AIGeneratedExerciseSpec]
+
+        enum CodingKeys: String, CodingKey {
+            case name, notes, exercises
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = UUID().uuidString
+            name = try c.decode(String.self, forKey: .name)
+            notes = try? c.decodeIfPresent(String.self, forKey: .notes)
+            exercises = (try? c.decode([AIGeneratedExerciseSpec].self, forKey: .exercises)) ?? []
+        }
+    }
+
+    func generateTrainingPlan(
+        daysPerWeek: Int,
+        durationMinutes: Int,
+        focus: String,
+        availableExerciseNames: [String]
+    ) async throws -> [AIGeneratedRoutine] {
+        let exerciseList = availableExerciseNames.joined(separator: ", ")
+        let systemPrompt = """
+        Du bist ein evidenzbasierter Kraftsport- & Hypertrophie-Coach.
+        Erstelle einen strukturierten Trainingsplan mit genau \(daysPerWeek) Einheiten pro Woche (ca. \(durationMinutes) Min. pro Einheit).
+        Verwende nach Möglichkeit EXAKT die Übungsnamen aus dieser vorhandenen Bibliothek:
+        \(exerciseList)
+
+        Antworte AUSSCHLIESSLICH mit validem JSON im Format:
+        {
+          "routines": [
+            {
+              "name": "Oberkörper A",
+              "notes": "Fokus Brust & Rücken",
+              "exercises": [
+                { "exerciseName": "Bankdrücken (Langhantel)", "targetSets": 3, "targetReps": 8, "restSeconds": 150 }
+              ]
+            }
+          ]
+        }
+        Keine Erklärungen außerhalb des JSON.
+        """
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": "Fokus / Wunsch: \(focus)"]
+        ]
+
+        let raw = try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: true,
+            temperature: 0.3
+        )
+
+        struct Wrapper: Decodable { let routines: [AIGeneratedRoutine] }
+        let jsonStr = extractJSONSubstring(from: raw)
+        guard let data = jsonStr.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(Wrapper.self, from: data),
+              !decoded.routines.isEmpty else {
+            throw MistralAIError.decodingFailed("Trainingsplan konnte nicht als JSON gelesen werden.")
+        }
+        return decoded.routines
+    }
+
+    // MARK: - AI Macro Recipe Chef
+
+    struct AIGeneratedRecipe: Decodable {
+        let title: String
+        let prepTimeMinutes: Int
+        let steps: [String]
+        let ingredients: [AIEstimatedFood]
+
+        enum CodingKeys: String, CodingKey {
+            case title, prepTimeMinutes, steps, ingredients
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            title = (try? c.decode(String.self, forKey: .title)) ?? "High-Protein Rezept"
+            prepTimeMinutes = max(2, (try? c.decode(Int.self, forKey: .prepTimeMinutes)) ?? 10)
+            steps = (try? c.decode([String].self, forKey: .steps)) ?? []
+            ingredients = (try? c.decode([AIEstimatedFood].self, forKey: .ingredients)) ?? []
+        }
+    }
+
+    func generateMacroRecipe(
+        remainingCalories: Int,
+        remainingProtein: Int,
+        remainingCarbs: Int,
+        remainingFat: Int,
+        availableIngredients: String,
+        style: String
+    ) async throws -> AIGeneratedRecipe {
+        let systemPrompt = """
+        Du bist ein deutscher Fitness-Koch & Ernährungs-Assistent.
+        Erstelle EIN schnelles, realistisches, leckeres Rezept, das möglichst genau in das offene Makro-Budget des Nutzers passt.
+        Antworte AUSSCHLIESSLICH mit validem JSON im Format:
+        {
+          "title": "Beeren-Skyr Protein-Bowl",
+          "prepTimeMinutes": 5,
+          "steps": ["Skyr in eine Schüssel geben.", "Haferflocken & Beeren darüber geben."],
+          "ingredients": [
+            {
+              "name": "Skyr Natur",
+              "grams": 250,
+              "caloriesPer100g": 63,
+              "proteinPer100g": 11.0,
+              "carbsPer100g": 4.0,
+              "fatPer100g": 0.2,
+              "fiberPer100g": 0.0
+            }
+          ]
+        }
+        Keine Erklärungen außerhalb des JSON.
+        """
+
+        let userPrompt = """
+        Offenes Tagesbudget: ca. \(max(150, remainingCalories)) kcal, ca. \(max(15, remainingProtein))g Eiweiß, ca. \(max(0, remainingCarbs))g Kohlenhydrate, ca. \(max(0, remainingFat))g Fett.
+        Gewünschter Stil: \(style)
+        Vorhandene Zutaten / Wünsche: \(availableIngredients.isEmpty ? "Egal, einfache Supermarkt-Zutaten" : availableIngredients)
+        """
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": userPrompt]
+        ]
+
+        let raw = try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: true,
+            temperature: 0.4
+        )
+
+        let jsonStr = extractJSONSubstring(from: raw)
+        guard let data = jsonStr.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(AIGeneratedRecipe.self, from: data),
+              !decoded.ingredients.isEmpty else {
+            throw MistralAIError.decodingFailed("Rezept konnte nicht geparst werden.")
+        }
+        return decoded
+    }
+
+    // MARK: - AI Nutrition Label Scanner (for Custom Food Form)
+
+    struct AIScannedNutritionLabel: Decodable {
+        let name: String?
+        let brand: String?
+        let servingSizeGrams: Double?
+        let caloriesPer100g: Double?
+        let proteinPer100g: Double?
+        let carbsPer100g: Double?
+        let fatPer100g: Double?
+        let fiberPer100g: Double?
+        let sugarPer100g: Double?
+        let saltPer100g: Double?
+    }
+
+    func scanNutritionLabel(_ image: UIImage) async throws -> AIScannedNutritionLabel {
+        guard let base64 = encodeImageForVision(image) else {
+            throw MistralAIError.decodingFailed("Bild konnte nicht verarbeitet werden.")
+        }
+
+        let systemPrompt = """
+        Du liest Nährwerttabellen von Lebensmittelverpackungen präzise aus (Werte pro 100g / 100ml).
+        Antworte AUSSCHLIESSLICH mit validem JSON:
+        {
+          "name": "Produktname falls sichtbar oder null",
+          "brand": "Marke falls sichtbar oder null",
+          "servingSizeGrams": 100,
+          "caloriesPer100g": 240,
+          "proteinPer100g": 12.5,
+          "carbsPer100g": 30.0,
+          "fatPer100g": 6.5,
+          "fiberPer100g": 4.0,
+          "sugarPer100g": 5.0,
+          "saltPer100g": 0.8
+        }
+        Nutze null für Werte, die nicht lesbar sind.
+        """
+
+        let userContent: [[String: Any]] = [
+            ["type": "text", "text": "Lies die Nährwerttabelle pro 100g aus diesem Foto aus."],
+            ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64)"]]
+        ]
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": userContent]
+        ]
+
+        let raw = try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: true,
+            temperature: 0.1
+        )
+
+        let jsonStr = extractJSONSubstring(from: raw)
+        guard let data = jsonStr.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(AIScannedNutritionLabel.self, from: data) else {
+            throw MistralAIError.decodingFailed("Nährwerttabelle konnte nicht ausgelesen werden.")
+        }
+        return decoded
+    }
+
+    // MARK: - Post-Workout Recap Feedback
+
+    func generateWorkoutFeedback(recap: CompletedWorkoutRecap) async throws -> String {
+        let mins = max(1, recap.durationSeconds / 60)
+        let prs = recap.prDescriptions.isEmpty ? "Keine neuen PRs" : recap.prDescriptions.joined(separator: "; ")
+
+        let systemPrompt = """
+        Du bist ein motivierender, evidenzbasierter Kraftsport-Coach (auf Deutsch, per Du).
+        Gib in genau 3 kurzen, knackigen Stichpunkten (ohne Floskeln) Feedback zum gerade abgeschlossenen Training:
+        1. Einordnung von Volumen & Dauer
+        2. Lob zu PRs oder Konstanz
+        3. Ein konkreter Tipp für Regeneration / nächstes Training (Protein/Schlaf/Progression).
+        """
+
+        let userText = """
+        Gerade abgeschlossenes Workout: \(recap.workoutName)
+        Dauer: \(mins) Min. | Übungen: \(recap.exerciseCount) | Abgehakte Sätze: \(recap.completedSets) | Gesamtvolumen: \(Formatters.weight(recap.totalVolumeKg)) kg
+        Neue Bestleistungen: \(prs)
+        """
+
+        let messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": userText]
+        ]
+
+        return try await sendChatCompletion(
+            model: selectedModel.rawValue,
+            messages: messages,
+            expectJSON: false,
+            temperature: 0.4
+        )
+    }
+
+    private func extractJSONSubstring(from raw: String) -> String {
+        var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.hasPrefix("```") {
+            if let firstNewline = cleaned.firstIndex(of: "\n") {
+                cleaned = String(cleaned[cleaned.index(after: firstNewline)...])
+            }
+            if cleaned.hasSuffix("```") {
+                cleaned = String(cleaned.dropLast(3))
+            }
+            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let start = cleaned.firstIndex(of: "{"), let end = cleaned.lastIndex(of: "}"), start < end {
+            return String(cleaned[start...end])
+        }
+        return cleaned
+    }
+
     // MARK: - HTTP Core
 
     private func sendChatCompletion(
