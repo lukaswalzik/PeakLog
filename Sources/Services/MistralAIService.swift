@@ -413,21 +413,48 @@ final class MistralAIService: ObservableObject {
             throw MistralAIError.apiError(http.statusCode, errText)
         }
 
-        struct ChatResponse: Decodable {
-            struct Choice: Decodable {
-                struct Message: Decodable {
-                    let content: String?
-                }
-                let message: Message
-            }
-            let choices: [Choice]
-        }
-
-        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
-        guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
+        let text = try extractAssistantText(from: data)
+        guard !text.isEmpty else {
             throw MistralAIError.invalidResponse
         }
         return text
+    }
+
+    /// Supports both classic String `message.content` and Mistral Large 4 / Small 4 chunked reasoning arrays
+    /// (`[{"type": "thinking", ...}, {"type": "text", "text": "..."}]`).
+    private func extractAssistantText(from data: Data) throws -> String {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = root["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any] else {
+            throw MistralAIError.invalidResponse
+        }
+
+        if let plainString = message["content"] as? String {
+            return plainString.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let chunks = message["content"] as? [[String: Any]] {
+            var textParts: [String] = []
+            for chunk in chunks {
+                let type = (chunk["type"] as? String)?.lowercased() ?? ""
+                // Skip internal reasoning/thinking blocks
+                if type == "thinking" || type == "reasoning" {
+                    continue
+                }
+                if let t = chunk["text"] as? String, !t.isEmpty {
+                    textParts.append(t)
+                } else if let c = chunk["content"] as? String, !c.isEmpty {
+                    textParts.append(c)
+                }
+            }
+            let joined = textParts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !joined.isEmpty {
+                return joined
+            }
+        }
+
+        throw MistralAIError.decodingFailed("Antwort enthielt keinen lesbaren Text.")
     }
 
     private func parseEstimatedFoods(from rawContent: String) throws -> [AIEstimatedFood] {
@@ -442,19 +469,35 @@ final class MistralAIService: ObservableObject {
             cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        guard let data = cleaned.data(using: .utf8) else {
-            throw MistralAIError.decodingFailed("Ungültiges UTF-8")
-        }
-
         struct Wrapper: Decodable {
             let items: [AIEstimatedFood]
         }
 
-        if let wrapped = try? JSONDecoder().decode(Wrapper.self, from: data), !wrapped.items.isEmpty {
-            return wrapped.items
+        func tryDecode(_ candidate: String) -> [AIEstimatedFood]? {
+            guard let data = candidate.data(using: .utf8) else { return nil }
+            if let wrapped = try? JSONDecoder().decode(Wrapper.self, from: data), !wrapped.items.isEmpty {
+                return wrapped.items
+            }
+            if let directArray = try? JSONDecoder().decode([AIEstimatedFood].self, from: data), !directArray.isEmpty {
+                return directArray
+            }
+            return nil
         }
-        if let directArray = try? JSONDecoder().decode([AIEstimatedFood].self, from: data), !directArray.isEmpty {
-            return directArray
+
+        if let decoded = tryDecode(cleaned) {
+            return decoded
+        }
+
+        // Fallback: extract first JSON object or array substring if model added prose
+        if let startObj = cleaned.firstIndex(of: "{"), let endObj = cleaned.lastIndex(of: "}"), startObj < endObj {
+            if let decoded = tryDecode(String(cleaned[startObj...endObj])) {
+                return decoded
+            }
+        }
+        if let startArr = cleaned.firstIndex(of: "["), let endArr = cleaned.lastIndex(of: "]"), startArr < endArr {
+            if let decoded = tryDecode(String(cleaned[startArr...endArr])) {
+                return decoded
+            }
         }
 
         throw MistralAIError.decodingFailed("Keine Lebensmittel in der KI-Antwort erkannt.")
