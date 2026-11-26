@@ -3,6 +3,7 @@ import SwiftUI
 struct HistoryListView: View {
     @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var gymStore: GymStore
+    @EnvironmentObject private var cardioStore: CardioStore
 
     enum HistoryMode: String, CaseIterable, Identifiable {
         case strength = "Kraft"
@@ -14,6 +15,7 @@ struct HistoryListView: View {
     @State private var selectedMode: HistoryMode = .strength
     @State private var selectedGymFilterId: String? = nil
     @State private var workoutToDelete: WorkoutDetail? = nil
+    @State private var isShowingCalendar: Bool = false
 
     private var filteredWorkouts: [WorkoutDetail] {
         guard let gymId = selectedGymFilterId else {
@@ -35,6 +37,16 @@ struct HistoryListView: View {
                 .padding(.vertical, 10)
                 .background(Color(uiColor: .systemGroupedBackground))
 
+                if isShowingCalendar {
+                    TrainingCalendarView(
+                        strengthDates: historyStore.completedWorkouts.map { $0.workout.startedAt },
+                        cardioDates: cardioStore.sessions.map { $0.startedAt }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                    .background(Color(uiColor: .systemGroupedBackground))
+                }
+
                 if selectedMode == .strength {
                     if !gymStore.gyms.isEmpty {
                         gymFilterBar
@@ -45,6 +57,18 @@ struct HistoryListView: View {
                 }
             }
             .navigationTitle("Verlauf")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isShowingCalendar.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isShowingCalendar ? "calendar.circle.fill" : "calendar")
+                    }
+                    .accessibilityLabel("Trainingskalender")
+                }
+            }
             .alert(
                 "Workout löschen?",
                 isPresented: Binding(

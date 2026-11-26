@@ -4,6 +4,7 @@ import UIKit
 struct WorkoutSetRowView: View {
     let set: WorkoutSet
     let previous: PreviousSetReference?
+    var isPR: Bool = false
     let onUpdate: (WorkoutSet) -> Void
     let onToggleComplete: () -> Void
     let onDelete: () -> Void
@@ -20,12 +21,14 @@ struct WorkoutSetRowView: View {
     init(
         set: WorkoutSet,
         previous: PreviousSetReference?,
+        isPR: Bool = false,
         onUpdate: @escaping (WorkoutSet) -> Void,
         onToggleComplete: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) {
         self.set = set
         self.previous = previous
+        self.isPR = isPR
         self.onUpdate = onUpdate
         self.onToggleComplete = onToggleComplete
         self.onDelete = onDelete
@@ -93,12 +96,27 @@ struct WorkoutSetRowView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            Text(Formatters.previousSet(previous))
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            if isPR {
+                HStack(spacing: 2) {
+                    Image(systemName: "trophy.fill")
+                    Text("PR")
+                }
+                .font(.caption2)
+                .fontWeight(.heavy)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.yellow.opacity(0.25))
+                .foregroundColor(.orange)
+                .clipShape(Capsule())
                 .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                Text(Formatters.previousSet(previous))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
 
             TextField(weightPlaceholder, text: $weightText)
                 .keyboardType(.decimalPad)
@@ -157,8 +175,13 @@ struct WorkoutSetRowView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(set.isCompleted ? Color.green.opacity(0.12) : Color.clear)
+        .background(set.isCompleted ? (isPR ? Color.yellow.opacity(0.14) : Color.green.opacity(0.12)) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .onChange(of: isPR) { nowPR in
+            if nowPR {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
         .onChange(of: set.weightKg) { newWeight in
             guard focusedField != .weight else { return }
             let formatted = newWeight.map { Formatters.weight($0) } ?? ""

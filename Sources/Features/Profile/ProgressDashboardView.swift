@@ -163,6 +163,20 @@ struct ProgressDashboardView: View {
         return (minW - pad)...(maxW + pad)
     }
 
+    private var weeklyMuscleGroupSets: [(group: MuscleGroup, sets: Int)] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        var counts: [MuscleGroup: Int] = [:]
+        for detail in historyStore.completedWorkouts where detail.workout.startedAt >= cutoff {
+            for ex in detail.exercises {
+                let workingSets = ex.sets.filter { $0.isCompleted && $0.setType != .warmup }.count
+                counts[ex.exercise.muscleGroup, default: 0] += workingSets
+            }
+        }
+        return MuscleGroup.allCases
+            .filter { $0 != .other }
+            .map { ($0, counts[$0] ?? 0) }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -174,6 +188,7 @@ struct ProgressDashboardView: View {
                 .pickerStyle(.segmented)
 
                 trendSummaryRow
+                weeklyMuscleVolumeCard
                 strengthChartCard
                 bodyweightChartCard
                 topGainsSection
@@ -183,6 +198,52 @@ struct ProgressDashboardView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Fortschritt & Trends")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var weeklyMuscleVolumeCard: some View {
+        let totalSets = weeklyMuscleGroupSets.reduce(0) { $0 + $1.sets }
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Wochen-Volumen (letzte 7 Tage)")
+                        .font(.headline)
+                    Text("Arbeitssätze pro Muskelgruppe · Richtwert 10–20 Sätze")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text("\(totalSets) Sätze")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.14))
+                    .foregroundColor(.accentColor)
+                    .clipShape(Capsule())
+            }
+
+            Chart {
+                RuleMark(y: .value("Ziel Min", 10))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(Color.green.opacity(0.6))
+
+                ForEach(weeklyMuscleGroupSets, id: \.group.id) { item in
+                    BarMark(
+                        x: .value("Muskel", item.group.displayName),
+                        y: .value("Sätze", item.sets)
+                    )
+                    .foregroundStyle(item.group.accentColor)
+                    .cornerRadius(6)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading)
+            }
+            .frame(height: 170)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard()
     }
 
     private var trendSummaryRow: some View {

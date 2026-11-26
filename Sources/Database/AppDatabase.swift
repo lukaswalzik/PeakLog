@@ -205,6 +205,8 @@ extension AppDatabase {
             guard let exercise = exercisesById[we.exerciseId] else { return nil }
             let sets = setsByWorkoutExercise[we.id] ?? []
             let previousSets: [Int: PreviousSetReference]
+            var histBest1RM: Double = 0
+            var histBestWeight: Double = 0
             if includePreviousSets {
                 previousSets = try fetchPreviousSets(
                     forExerciseId: we.exerciseId,
@@ -212,6 +214,13 @@ extension AppDatabase {
                     preferredGymId: workout.gymId,
                     in: db
                 )
+                let bests = try fetchHistoricalBests(
+                    forExerciseId: we.exerciseId,
+                    excludingWorkoutId: workout.id,
+                    in: db
+                )
+                histBest1RM = bests.best1RM
+                histBestWeight = bests.bestWeight
             } else {
                 previousSets = [:]
             }
@@ -219,11 +228,50 @@ extension AppDatabase {
                 workoutExercise: we,
                 exercise: exercise,
                 sets: sets,
-                previousSets: previousSets
+                previousSets: previousSets,
+                historicalBest1RM: histBest1RM,
+                historicalBestWeightKg: histBestWeight
             )
         }
 
         return WorkoutDetail(workout: workout, gymName: gymName, exercises: details)
+    }
+
+    private static func fetchHistoricalBests(
+        forExerciseId exerciseId: String,
+        excludingWorkoutId: String,
+        in db: Database
+    ) throws -> (best1RM: Double, bestWeight: Double) {
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT ws.weightKg AS weightKg, ws.reps AS reps
+                FROM workout_sets ws
+                JOIN workout_exercises we ON we.id = ws.workoutExerciseId
+                JOIN workouts w ON w.id = we.workoutId
+                WHERE we.exerciseId = ?
+                  AND w.id != ?
+                  AND w.finishedAt IS NOT NULL
+                  AND ws.isCompleted = 1
+                  AND ws.setType != 'warmup'
+                  AND ws.weightKg IS NOT NULL
+                  AND ws.weightKg > 0
+                  AND ws.reps IS NOT NULL
+                  AND ws.reps > 0
+                """,
+            arguments: [exerciseId, excludingWorkoutId]
+        )
+
+        var best1RM: Double = 0
+        var bestWeight: Double = 0
+        for row in rows {
+            let w: Double = row["weightKg"]
+            let r: Int = row["reps"]
+            if w > bestWeight { bestWeight = w }
+            let est = OneRepMaxCalculator.estimatedOneRepMax(weightKg: w, reps: r)
+            if est > best1RM { best1RM = est }
+        }
+        return (best1RM, bestWeight)
     }
 
     private static func fetchPreviousSets(
@@ -425,7 +473,7 @@ extension AppDatabase {
         }
     }
 
-    func finishWorkout(id: String) throws {
+    func finishWorkout(id: String, updateRoutine: Bool = false) throws {
         try dbWriter.write { db in
             // Remove uncompleted sets so history & stats only contain completed work
             try db.execute(
@@ -455,6 +503,7 @@ extension AppDatabase {
                 .order(WorkoutExercise.Columns.sortOrder.asc)
                 .fetchAll(db)
 
+            var setCountsByWeId: [String: Int] = [:]
             for (exIndex, var we) in remainingExercises.enumerated() {
                 if we.sortOrder != exIndex {
                     we.sortOrder = exIndex
@@ -464,6 +513,7 @@ extension AppDatabase {
                     .filter(WorkoutSet.Columns.workoutExerciseId == we.id)
                     .order(WorkoutSet.Columns.setOrder.asc)
                     .fetchAll(db)
+                setCountsByWeId[we.id] = sets.count
                 for (setIndex, var set) in sets.enumerated() {
                     if set.setOrder != setIndex + 1 {
                         set.setOrder = setIndex + 1
@@ -472,9 +522,69 @@ extension AppDatabase {
                 }
             }
 
+            if updateRoutine,
+               let workout = try Workout.fetchOne(db, key: id),
+               let routineId = workout.routineId,
+               !remainingExercises.isEmpty {
+                try RoutineExercise
+                    .filter(RoutineExercise.Columns.routineId == routineId)
+                    .deleteAll(db)
+
+                for (index, we) in remainingExercises.enumerated() {
+                    let re = RoutineExercise(
+                        routineId: routineId,
+                        exerciseId: we.exerciseId,
+                        sortOrder: index,
+                        targetSets: max(1, setCountsByWeId[we.id] ?? 3),
+                        targetReps: nil,
+                        restSeconds: we.restSeconds,
+                        notes: we.notes
+                    )
+                    try re.insert(db)
+                }
+
+                try db.execute(
+                    sql: "UPDATE routines SET updatedAt = ? WHERE id = ?",
+                    arguments: [Date(), routineId]
+                )
+            }
+
             try db.execute(
                 sql: "UPDATE workouts SET finishedAt = ? WHERE id = ?",
                 arguments: [Date(), id]
+            )
+        }
+    }
+
+    func linkSupersetWithNext(workoutId: String, workoutExerciseId: String) throws {
+        try dbWriter.write { db in
+            let all = try WorkoutExercise
+                .filter(WorkoutExercise.Columns.workoutId == workoutId)
+                .order(WorkoutExercise.Columns.sortOrder.asc)
+                .fetchAll(db)
+
+            guard let idx = all.firstIndex(where: { $0.id == workoutExerciseId }),
+                  idx + 1 < all.count else {
+                return
+            }
+
+            var current = all[idx]
+            var next = all[idx + 1]
+            let maxGroup = all.compactMap { $0.supersetGroup }.max() ?? 0
+            let groupNumber = current.supersetGroup ?? next.supersetGroup ?? (maxGroup + 1)
+
+            current.supersetGroup = groupNumber
+            next.supersetGroup = groupNumber
+            try current.update(db)
+            try next.update(db)
+        }
+    }
+
+    func clearSuperset(workoutExerciseId: String) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE workout_exercises SET supersetGroup = NULL WHERE id = ?",
+                arguments: [workoutExerciseId]
             )
         }
     }

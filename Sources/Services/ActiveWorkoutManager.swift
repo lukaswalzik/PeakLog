@@ -111,7 +111,7 @@ final class ActiveWorkoutManager: ObservableObject {
 
     func toggleSetCompleted(
         _ set: WorkoutSet,
-        restSeconds: Int,
+        exerciseDetail: WorkoutExerciseDetail,
         previous: PreviousSetReference?
     ) {
         var updated = set
@@ -131,10 +131,43 @@ final class ActiveWorkoutManager: ObservableObject {
         do {
             try database.updateSet(updated)
             if willComplete {
-                onSetCompleted?(restSeconds)
+                let shouldStartRest = shouldTriggerRestTimer(for: exerciseDetail)
+                if shouldStartRest {
+                    onSetCompleted?(exerciseDetail.workoutExercise.restSeconds)
+                }
             }
         } catch {
             errorMessage = "Satz-Status konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    /// Only start rest timer when this exercise is NOT followed by another exercise in the same superset group.
+    private func shouldTriggerRestTimer(for exerciseDetail: WorkoutExerciseDetail) -> Bool {
+        guard let group = exerciseDetail.workoutExercise.supersetGroup,
+              let exercises = activeWorkout?.exercises,
+              let idx = exercises.firstIndex(where: { $0.id == exerciseDetail.id }) else {
+            return true
+        }
+        if idx + 1 < exercises.count, exercises[idx + 1].workoutExercise.supersetGroup == group {
+            return false
+        }
+        return true
+    }
+
+    func linkSupersetWithNext(workoutExerciseId: String) {
+        guard let workoutId = activeWorkout?.workout.id else { return }
+        do {
+            try database.linkSupersetWithNext(workoutId: workoutId, workoutExerciseId: workoutExerciseId)
+        } catch {
+            errorMessage = "Supersatz konnte nicht verknüpft werden: \(error.localizedDescription)"
+        }
+    }
+
+    func clearSuperset(workoutExerciseId: String) {
+        do {
+            try database.clearSuperset(workoutExerciseId: workoutExerciseId)
+        } catch {
+            errorMessage = "Supersatz konnte nicht gelöst werden: \(error.localizedDescription)"
         }
     }
 
@@ -160,10 +193,10 @@ final class ActiveWorkoutManager: ObservableObject {
         }
     }
 
-    func finishWorkout() {
+    func finishWorkout(updateRoutine: Bool = false) {
         guard let workoutId = activeWorkout?.workout.id else { return }
         do {
-            try database.finishWorkout(id: workoutId)
+            try database.finishWorkout(id: workoutId, updateRoutine: updateRoutine)
             isPresentingSheet = false
         } catch {
             errorMessage = "Workout konnte nicht abgeschlossen werden: \(error.localizedDescription)"

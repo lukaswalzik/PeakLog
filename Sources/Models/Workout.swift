@@ -77,6 +77,11 @@ struct WorkoutExercise: Identifiable, Equatable, Hashable, Codable, FetchableRec
     var sortOrder: Int
     var restSeconds: Int
     var notes: String?
+    var supersetGroup: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, workoutId, exerciseId, sortOrder, restSeconds, notes, supersetGroup
+    }
 
     enum Columns {
         static let id = Column(CodingKeys.id)
@@ -85,6 +90,7 @@ struct WorkoutExercise: Identifiable, Equatable, Hashable, Codable, FetchableRec
         static let sortOrder = Column(CodingKeys.sortOrder)
         static let restSeconds = Column(CodingKeys.restSeconds)
         static let notes = Column(CodingKeys.notes)
+        static let supersetGroup = Column(CodingKeys.supersetGroup)
     }
 
     init(
@@ -93,7 +99,8 @@ struct WorkoutExercise: Identifiable, Equatable, Hashable, Codable, FetchableRec
         exerciseId: String,
         sortOrder: Int,
         restSeconds: Int = 90,
-        notes: String? = nil
+        notes: String? = nil,
+        supersetGroup: Int? = nil
     ) {
         self.id = id
         self.workoutId = workoutId
@@ -101,6 +108,18 @@ struct WorkoutExercise: Identifiable, Equatable, Hashable, Codable, FetchableRec
         self.sortOrder = sortOrder
         self.restSeconds = restSeconds
         self.notes = notes
+        self.supersetGroup = supersetGroup
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        workoutId = try c.decode(String.self, forKey: .workoutId)
+        exerciseId = try c.decode(String.self, forKey: .exerciseId)
+        sortOrder = try c.decode(Int.self, forKey: .sortOrder)
+        restSeconds = try c.decodeIfPresent(Int.self, forKey: .restSeconds) ?? 90
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        supersetGroup = try c.decodeIfPresent(Int.self, forKey: .supersetGroup)
     }
 }
 
@@ -158,8 +177,24 @@ struct WorkoutExerciseDetail: Identifiable, Equatable, Hashable {
     var exercise: Exercise
     var sets: [WorkoutSet]
     var previousSets: [Int: PreviousSetReference]
+    var historicalBest1RM: Double = 0
+    var historicalBestWeightKg: Double = 0
 
     var id: String { workoutExercise.id }
+
+    func isLivePR(_ workoutSet: WorkoutSet) -> Bool {
+        guard workoutSet.isCompleted,
+              workoutSet.setType != .warmup,
+              let weight = workoutSet.weightKg,
+              let reps = workoutSet.reps,
+              weight > 0, reps > 0 else {
+            return false
+        }
+        // Only celebrate PR if there is prior history to beat
+        guard historicalBest1RM > 0 || historicalBestWeightKg > 0 else { return false }
+        let est1RM = OneRepMaxCalculator.estimatedOneRepMax(weightKg: weight, reps: reps)
+        return est1RM > historicalBest1RM + 0.05 || weight > historicalBestWeightKg + 0.05
+    }
 }
 
 struct WorkoutDetail: Identifiable, Equatable, Hashable {

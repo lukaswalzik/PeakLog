@@ -183,7 +183,12 @@ struct ActiveWorkoutView: View {
             }
             .alert("Workout abschließen?", isPresented: $isShowingFinishAlert) {
                 Button("Abschließen", role: .none) {
-                    activeWorkoutManager.finishWorkout()
+                    activeWorkoutManager.finishWorkout(updateRoutine: false)
+                }
+                if activeWorkoutManager.activeWorkout?.workout.routineId != nil {
+                    Button("Abschließen & Routine updaten", role: .none) {
+                        activeWorkoutManager.finishWorkout(updateRoutine: true)
+                    }
                 }
                 Button("Weiter trainieren", role: .cancel) {}
             } message: {
@@ -278,8 +283,18 @@ struct ActiveWorkoutView: View {
         .strongCard()
     }
 
+    private func supersetColor(for group: Int) -> Color {
+        let palette: [Color] = [.purple, .orange, .teal, .pink, .indigo]
+        return palette[abs(group - 1) % palette.count]
+    }
+
     private func exerciseCard(_ exerciseDetail: WorkoutExerciseDetail) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let supersetGroup = exerciseDetail.workoutExercise.supersetGroup
+        let exercises = activeWorkoutManager.activeWorkout?.exercises ?? []
+        let currentIndex = exercises.firstIndex(where: { $0.id == exerciseDetail.id })
+        let hasNextExercise = currentIndex != nil && (currentIndex! + 1 < exercises.count)
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
                 Button {
                     if let img = MediaStorage.shared.loadExerciseImage(for: exerciseDetail.exercise) {
@@ -291,9 +306,23 @@ struct ActiveWorkoutView: View {
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(exerciseDetail.exercise.name)
-                        .font(.headline)
-                        .foregroundColor(.accentColor)
+                    HStack(spacing: 6) {
+                        Text(exerciseDetail.exercise.name)
+                            .font(.headline)
+                            .foregroundColor(.accentColor)
+
+                        if let group = supersetGroup {
+                            Text("Supersatz \(group)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(supersetColor(for: group).opacity(0.18))
+                                .foregroundColor(supersetColor(for: group))
+                                .clipShape(Capsule())
+                        }
+                    }
+
                     Text("\(exerciseDetail.exercise.muscleGroup.displayName) · Pause \(Formatters.restDuration(exerciseDetail.workoutExercise.restSeconds))")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -302,6 +331,21 @@ struct ActiveWorkoutView: View {
                 Spacer()
 
                 Menu {
+                    if hasNextExercise {
+                        Button {
+                            activeWorkoutManager.linkSupersetWithNext(workoutExerciseId: exerciseDetail.id)
+                        } label: {
+                            Label("Mit nächster als Supersatz", systemImage: "link")
+                        }
+                    }
+                    if supersetGroup != nil {
+                        Button {
+                            activeWorkoutManager.clearSuperset(workoutExerciseId: exerciseDetail.id)
+                        } label: {
+                            Label("Supersatz lösen", systemImage: "link.badge.plus")
+                        }
+                    }
+                    Divider()
                     Button(role: .destructive) {
                         activeWorkoutManager.removeExercise(workoutExerciseId: exerciseDetail.id)
                     } label: {
@@ -339,13 +383,14 @@ struct ActiveWorkoutView: View {
                     WorkoutSetRowView(
                         set: set,
                         previous: exerciseDetail.previousSets[set.setOrder],
+                        isPR: exerciseDetail.isLivePR(set),
                         onUpdate: { updated in
                             activeWorkoutManager.updateSet(updated)
                         },
                         onToggleComplete: {
                             activeWorkoutManager.toggleSetCompleted(
                                 set,
-                                restSeconds: exerciseDetail.workoutExercise.restSeconds,
+                                exerciseDetail: exerciseDetail,
                                 previous: exerciseDetail.previousSets[set.setOrder]
                             )
                         },
@@ -375,6 +420,13 @@ struct ActiveWorkoutView: View {
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    supersetGroup.map { supersetColor(for: $0).opacity(0.6) } ?? Color.primary.opacity(0.06),
+                    lineWidth: supersetGroup != nil ? 2 : 1
+                )
+        )
     }
 
     private func dismissKeyboard() {

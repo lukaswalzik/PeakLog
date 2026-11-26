@@ -239,6 +239,12 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v8_supersets") { db in
+            try db.alter(table: "workout_exercises") { t in
+                t.add(column: "supersetGroup", .integer)
+            }
+        }
+
         return migrator
     }
 }
