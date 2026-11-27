@@ -16,6 +16,7 @@ struct StrongTrackerApp: App {
     @StateObject private var heartRateReceiver: HeartRateReceiver
     @StateObject private var healthKitService: HealthKitService
     @StateObject private var liveActivityManager: WorkoutLiveActivityManager
+    @StateObject private var widgetSyncManager: WidgetDataSyncManager
 
     init() {
         let db = AppDatabase.shared
@@ -39,10 +40,15 @@ struct StrongTrackerApp: App {
         }
         workoutManager.bindHeartRateReceiver(hrReceiver)
 
+        let rStore = RoutineStore(database: db)
+        let hStore = HistoryStore(database: db)
+        let bwStore = BodyweightStore(database: db)
         let cStore = CardioStore(database: db)
         cStore.onSessionSaved = { session in
             hkService.saveCardioSession(session)
         }
+        let nStore = NutritionStore(database: db)
+        let wStore = WellnessStore(database: db)
 
         let activityManager = WorkoutLiveActivityManager()
         activityManager.bind(
@@ -52,19 +58,30 @@ struct StrongTrackerApp: App {
             cardioStore: cStore
         )
 
+        let widgetSync = WidgetDataSyncManager(database: db)
+        widgetSync.bind(
+            historyStore: hStore,
+            cardioStore: cStore,
+            bodyweightStore: bwStore,
+            routineStore: rStore,
+            nutritionStore: nStore,
+            wellnessStore: wStore
+        )
+
         _exerciseStore = StateObject(wrappedValue: ExerciseStore(database: db))
-        _routineStore = StateObject(wrappedValue: RoutineStore(database: db))
+        _routineStore = StateObject(wrappedValue: rStore)
         _activeWorkoutManager = StateObject(wrappedValue: workoutManager)
         _restTimerManager = StateObject(wrappedValue: timerManager)
-        _historyStore = StateObject(wrappedValue: HistoryStore(database: db))
-        _bodyweightStore = StateObject(wrappedValue: BodyweightStore(database: db))
+        _historyStore = StateObject(wrappedValue: hStore)
+        _bodyweightStore = StateObject(wrappedValue: bwStore)
         _cardioStore = StateObject(wrappedValue: cStore)
         _gymStore = StateObject(wrappedValue: GymStore(database: db))
-        _nutritionStore = StateObject(wrappedValue: NutritionStore(database: db))
-        _wellnessStore = StateObject(wrappedValue: WellnessStore(database: db))
+        _nutritionStore = StateObject(wrappedValue: nStore)
+        _wellnessStore = StateObject(wrappedValue: wStore)
         _heartRateReceiver = StateObject(wrappedValue: hrReceiver)
         _healthKitService = StateObject(wrappedValue: hkService)
         _liveActivityManager = StateObject(wrappedValue: activityManager)
+        _widgetSyncManager = StateObject(wrappedValue: widgetSync)
 
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
@@ -88,6 +105,7 @@ struct StrongTrackerApp: App {
                 .environmentObject(heartRateReceiver)
                 .environmentObject(healthKitService)
                 .environmentObject(liveActivityManager)
+                .environmentObject(widgetSyncManager)
         }
     }
 }

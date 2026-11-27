@@ -78,9 +78,25 @@ struct RootTabView: View {
             }
         }
         .onOpenURL { url in
-            if url.scheme == "strongtracker" && url.host == "active-workout" {
+            guard url.scheme == "strongtracker" else { return }
+            if url.host == "active-workout" {
                 if activeWorkoutManager.hasActiveWorkout {
                     activeWorkoutManager.isPresentingSheet = true
+                }
+            } else if url.host == "tab" {
+                switch url.lastPathComponent {
+                case "start":
+                    selectedTab = .start
+                case "nutrition":
+                    selectedTab = .nutrition
+                case "history":
+                    selectedTab = .history
+                case "exercises":
+                    selectedTab = .exercises
+                case "profile":
+                    selectedTab = .profile
+                default:
+                    break
                 }
             }
         }

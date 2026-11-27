@@ -14,8 +14,8 @@
   <img src="https://img.shields.io/badge/Swift-5%20%7C%20SwiftUI-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 5 SwiftUI" />
   <img src="https://img.shields.io/badge/Database-GRDB%20%2F%20SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite GRDB" />
   <img src="https://img.shields.io/badge/Distribution-TrollStore%20IPA-5856D6?style=for-the-badge" alt="TrollStore IPA" />
-  <a href="https://github.com/lukaswalzik/strong-tracker/actions/workflows/build-ipa.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/lukaswalzik/strong-tracker/build-ipa.yml?branch=main&style=for-the-badge&label=IPA%20Build" alt="IPA Build Status" />
+  <a href="https://github.com/lukaswalzik/PeakLog/actions/workflows/build-ipa.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/lukaswalzik/PeakLog/build-ipa.yml?branch=main&style=for-the-badge&label=IPA%20Build" alt="IPA Build Status" />
   </a>
 </p>
 
@@ -46,6 +46,10 @@
 
 ### Krafttraining, Dynamic Island & Smart Coaching
 - **Dynamic Island & Sperrbildschirm Live Activity (`ActivityKit`):** Zeigt Pausentimer-Countdown, Live-Herzfrequenz + Zone, aktuelle Übung und Satz-Fortschritt live in der **Dynamic Island** (iPhone 14 Pro) und auf dem Sperrbildschirm – inkl. 1-Tap-Sprung zurück ins laufende Workout.
+- **Home-Screen & Sperrbildschirm Widgets (`WidgetKit`):**
+  - **Ernährung & Makros** *(Klein, Mittel + Sperrbildschirm-Ring, -Rechteck & -Inline)*: Kalorien-Ring, Protein, Carbs, Fett & Wasser heute.
+  - **Training & Streak** *(Klein, Mittel + Sperrbildschirm)*: Wochen-Streak, 7-Tage-Wochenaktivität, Wochenvolumen, Level, Readiness & nächste Routine.
+  - **Wasser & Supplements** *(Klein + Sperrbildschirm)*: Trinkziel-Fortschritt & abgehakte Supplements heute.
 - **Routinen & Vorlagen:** Eigene Trainingspläne erstellen, sortieren, per **Deload-Modus** (−20 % Gewicht, reduziertes Volumen) starten und nach dem Training direkt aktualisieren.
 - **Aktives Workout-Logging:** Vorherige Sätze pro Gym im Blick, Satztypen (`Arbeitssatz`, `Aufwärmsatz`, `Dropset`, `Muskelversagen`), **RIR-Tracking**, **Supersätze**, Aufwärmsatz-Generator und schnelles Ersetzen besetzter Geräte.
 - **Smart Progression & Live-PRs:** Automatische Double-Progression-Empfehlungen, Live-PR-Erkennung (geschätztes 1RM nach Epley), automatischer **Pausentimer** inkl. lokaler Benachrichtigungen und minimierbarem Workout-Banner.
@@ -95,9 +99,9 @@ printf "132" | nc -u -w1 127.0.0.1 49153
 ## Installation (TrollStore / Sideloading)
 
 ### Option 1: Vorgefertigte `.ipa` aus GitHub Actions
-1. Öffne den Tab **[Actions](https://github.com/lukaswalzik/strong-tracker/actions/workflows/build-ipa.yml)** und wähle den letzten erfolgreichen Lauf von **Build Unsigned IPA**.
+1. Öffne den Tab **[Actions](https://github.com/lukaswalzik/PeakLog/actions/workflows/build-ipa.yml)** und wähle den letzten erfolgreichen Lauf von **Build Unsigned IPA**.
 2. Lade das Artifact **`PeakLog-ipa`** herunter und entpacke die `.zip`-Datei.
-3. Installiere `PeakLog.ipa` direkt über **TrollStore** (HealthKit-Entitlements & Live-Activity-Extension sind bereits ad-hoc eingebettet).
+3. Installiere `PeakLog.ipa` direkt über **TrollStore** (HealthKit-, App-Group-Entitlements & Widget-/Live-Activity-Extension sind bereits ad-hoc eingebettet).
 
 > **Wichtig bei Updates:** Die feste Bundle-ID `com.local.strongtracker` bleibt unverändert, sodass deine lokale Datenbank, Fotos und Einstellungen beim Drüberinstallieren vollständig erhalten bleiben.
 
@@ -106,8 +110,8 @@ printf "132" | nc -u -w1 127.0.0.1 49153
 Voraussetzungen: macOS mit Xcode (iOS 16.5+ SDK) und [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```bash
-git clone https://github.com/lukaswalzik/strong-tracker.git
-cd strong-tracker
+git clone https://github.com/lukaswalzik/PeakLog.git
+cd PeakLog
 
 brew install xcodegen
 xcodegen generate
@@ -119,7 +123,7 @@ open StrongTracker.xcodeproj
 ## Tech-Stack & Architektur
 
 - **UI:** SwiftUI (strikt kompatibel ab **iOS 16.5**), `NavigationStack`, `ObservableObject` / `@StateObject` / `@EnvironmentObject`
-- **Live Activities & Dynamic Island:** `ActivityKit` + `WidgetKit` Extension (`LiveActivityExtension/`)
+- **Widgets, Live Activities & Dynamic Island:** `WidgetKit` + `ActivityKit` Extension (`LiveActivityExtension/`) mit App-Group-Sync (`group.com.local.strongtracker`)
 - **Health & Sensorik:** `HealthKit` (`HKAnchoredObjectQuery`, `HKWorkoutBuilder`) & `Darwin` Dual-Stack UDP Socket (`DispatchSourceRead`)
 - **Diagramme:** Swift Charts
 - **Persistenz:** [GRDB.swift](https://github.com/groue/GRDB.swift) (SQLite mit versionierten Migrationen `v1`–`v12`)
@@ -131,9 +135,9 @@ Sources/
 ├── App/                  # StrongTrackerApp, RootTabView & ActiveWorkoutBanner
 ├── Database/             # AppDatabase, Migrations (v1–v12), SeedData, SeedFoods
 ├── Models/               # Workout, HeartRateSample, CardioSession, Nutrition, Wellness, BackupPayload
-├── Services/             # ActiveWorkoutManager, HealthKitService, HeartRateReceiver, WorkoutLiveActivityManager, StrongCSVImportService, MistralAI, Oura, Backup
-├── Shared/               # Theme, Formatters, 1RM-Rechner, WorkoutActivityAttributes, Komponenten
+├── Services/             # ActiveWorkoutManager, HealthKitService, HeartRateReceiver, WorkoutLiveActivityManager, WidgetDataSyncManager, StrongCSVImportService, MistralAI, Oura, Backup
+├── Shared/               # Theme, Formatters, 1RM-Rechner, WorkoutActivityAttributes, PeakLogWidgetSnapshot, Komponenten
 └── Features/             # Start, ActiveWorkout, History, Exercises, Cardio, Nutrition, Bodyweight, Wellness, AI, Gyms, Profile
 
-LiveActivityExtension/    # Dynamic Island & Lock Screen WidgetKit Extension
+LiveActivityExtension/    # Dynamic Island, Lock Screen Live Activity & Home/Lock Screen Widgets (WidgetKit)
 ```

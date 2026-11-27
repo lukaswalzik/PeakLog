@@ -12,8 +12,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.10.0"
-    CURRENT_PROJECT_VERSION: "12"
+    MARKETING_VERSION: "0.11.0"
+    CURRENT_PROJECT_VERSION: "13"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Manual
     CODE_SIGNING_ALLOWED: NO
@@ -64,6 +64,7 @@ targets:
     sources:
       - path: LiveActivityExtension
       - path: Sources/Shared/LiveActivity/WorkoutActivityAttributes.swift
+      - path: Sources/Shared/LiveActivity/PeakLogWidgetSnapshot.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.strongtracker.liveactivity
@@ -72,6 +73,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Resources/LiveActivity-Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: PeakLog Live
+        CODE_SIGN_ENTITLEMENTS: Resources/LiveActivity.entitlements
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         CODE_SIGNING_ALLOWED: NO

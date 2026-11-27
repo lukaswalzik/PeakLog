@@ -5,5 +5,8 @@ import WidgetKit
 struct StrongTrackerLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         WorkoutLiveActivityWidget()
+        PeakLogNutritionWidget()
+        PeakLogTrainingWidget()
+        PeakLogWaterWidget()
     }
 }
