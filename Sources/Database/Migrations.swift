@@ -368,6 +368,10 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v13_seed_more_exercises") { db in
+            try SeedData.insertDefaultExercises(in: db)
+        }
+
         return migrator
     }
 }
