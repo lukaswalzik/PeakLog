@@ -7,6 +7,7 @@ struct ActiveWorkoutView: View {
     @EnvironmentObject private var gymStore: GymStore
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
+    @EnvironmentObject private var healthKitService: HealthKitService
 
     @State private var workoutName: String = ""
     @State private var workoutNotes: String = ""
@@ -27,7 +28,10 @@ struct ActiveWorkoutView: View {
                         VStack(spacing: 16) {
                             headerCard(detail: detail)
 
-                            if heartRateReceiver.isEnabled || activeWorkoutManager.liveHeartRateStats.sampleCount > 0 {
+                            if heartRateReceiver.isEnabled
+                                || heartRateReceiver.hasLiveSignal
+                                || (healthKitService.isConnected && healthKitService.liveHeartRateEnabled)
+                                || activeWorkoutManager.liveHeartRateStats.sampleCount > 0 {
                                 LiveHeartRateCardView(
                                     receiver: heartRateReceiver,
                                     stats: activeWorkoutManager.liveHeartRateStats,
@@ -609,5 +613,6 @@ struct ActiveWorkoutView_Previews: PreviewProvider {
             .environmentObject(GymStore(database: db))
             .environmentObject(CardioStore(database: db))
             .environmentObject(HeartRateReceiver(autoStart: false))
+            .environmentObject(HealthKitService(autoStart: false))
     }
 }

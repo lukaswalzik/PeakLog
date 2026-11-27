@@ -47,6 +47,9 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_NSCameraUsageDescription: "StrongTracker benötigt Zugriff auf die Kamera, um Fotos für Übungen und Körperfortschritt aufzunehmen."
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "StrongTracker benötigt Zugriff auf deine Fotos, um Bilder für Übungen und Körperfortschritt auszuwählen."
+        INFOPLIST_KEY_NSHealthShareUsageDescription: "StrongTracker liest deine Live-Herzfrequenz, Körpergewicht sowie Aktivitäts- und Erholungsdaten aus Apple Health, um sie im Training anzuzeigen und zu speichern."
+        INFOPLIST_KEY_NSHealthUpdateUsageDescription: "StrongTracker speichert abgeschlossene Kraft- und Cardio-Workouts auf Wunsch in Apple Health."
+        CODE_SIGN_ENTITLEMENTS: Resources/StrongTracker.entitlements
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""

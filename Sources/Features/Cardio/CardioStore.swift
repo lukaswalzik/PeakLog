@@ -16,6 +16,9 @@ final class CardioStore: ObservableObject {
     private let database: AppDatabase
     private var cancellable: AnyDatabaseCancellable?
 
+    /// Hook invoked whenever a cardio session is saved (e.g. for Apple Health workout export).
+    var onSessionSaved: ((CardioSession) -> Void)?
+
     init(database: AppDatabase) {
         self.database = database
         let stored = UserDefaults.standard.integer(forKey: Self.maxHRDefaultsKey)
@@ -65,6 +68,7 @@ final class CardioStore: ObservableObject {
     func save(_ session: CardioSession) {
         do {
             try database.saveCardioSession(session)
+            onSessionSaved?(session)
         } catch {
             errorMessage = "Cardio-Einheit konnte nicht gespeichert werden: \(error.localizedDescription)"
         }

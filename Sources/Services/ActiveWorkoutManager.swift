@@ -13,6 +13,9 @@ final class ActiveWorkoutManager: ObservableObject {
     /// Hook invoked when a set transitions from incomplete -> completed, passing the exercise's restSeconds.
     var onSetCompleted: ((Int) -> Void)?
 
+    /// Hook invoked when a workout finishes cleanly (id, name, startedAt, finishedAt, totalVolumeKg).
+    var onWorkoutFinished: ((String, String, Date, Date, Double) -> Void)?
+
     private let database: AppDatabase
     private var cancellable: AnyDatabaseCancellable?
     private var hrCancellable: AnyCancellable?
@@ -370,6 +373,13 @@ final class ActiveWorkoutManager: ObservableObject {
             trackingWorkoutId = nil
             isPresentingSheet = false
             if recap.completedSets > 0 {
+                onWorkoutFinished?(
+                    workoutId,
+                    detail.workout.name,
+                    detail.workout.startedAt,
+                    finishedAt,
+                    detail.totalVolumeKg
+                )
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     self.lastCompletedRecap = recap
                 }

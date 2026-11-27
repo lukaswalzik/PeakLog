@@ -3,18 +3,32 @@ import Darwin
 import Foundation
 import UIKit
 
+enum HeartRateSource: String, Equatable {
+    case udp
+    case appleHealth
+
+    var displayName: String {
+        switch self {
+        case .udp: return "UDP Bridge"
+        case .appleHealth: return "Apple Health"
+        }
+    }
+}
+
 struct HeartRateReading: Equatable {
     let bpm: Int
     let recordedAt: Date
 }
 
 /// Receives live heart rate BPM values over local UDP (default port: 49153, IPv4 + IPv6 loopback/any),
-/// e.g. UTF-8 ASCII integers in 30...240 ("74") sent ~1x/second by airpods-hf-bridge.
+/// e.g. UTF-8 ASCII integers in 30...240 ("74") sent ~1x/second by airpods-hf-bridge,
+/// and also accepts external live readings (e.g. from Apple HealthKit).
 final class HeartRateReceiver: ObservableObject {
     static let defaultHost = "127.0.0.1"
     static let defaultPort: UInt16 = 49153
     static let validBPMRange: ClosedRange<Int> = 30...240
     static let signalTimeoutSeconds: TimeInterval = 6.0
+    static let appleHealthTimeoutSeconds: TimeInterval = 15.0
 
     private static let enabledDefaultsKey = "strongtracker.hr.udp_receiver_enabled"
     private static let portDefaultsKey = "strongtracker.hr.udp_receiver_port"
@@ -43,6 +57,7 @@ final class HeartRateReceiver: ObservableObject {
 
     @Published private(set) var isListening: Bool = false
     @Published private(set) var currentBPM: Int? = nil
+    @Published private(set) var activeSource: HeartRateSource? = nil
     @Published private(set) var lastSampleAt: Date? = nil
     @Published private(set) var receivedPacketCount: Int = 0
     @Published private(set) var rawPacketCount: Int = 0
@@ -60,6 +75,7 @@ final class HeartRateReceiver: ObservableObject {
     private var activeFDV6: Int32 = -1
     private var boundPort: UInt16 = HeartRateReceiver.defaultPort
     private var shouldBeListening: Bool = false
+    private var lastUDPSampleAt: Date? = nil
     private var stalenessTimer: Timer?
     private var foregroundObserver: NSObjectProtocol?
 
@@ -140,9 +156,12 @@ final class HeartRateReceiver: ObservableObject {
     func stop() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            self.stalenessTimer?.invalidate()
-            self.stalenessTimer = nil
-            self.currentBPM = nil
+            if self.activeSource == .udp {
+                self.stalenessTimer?.invalidate()
+                self.stalenessTimer = nil
+                self.currentBPM = nil
+                self.activeSource = nil
+            }
             self.isListening = false
             self.lastError = nil
         }
@@ -150,6 +169,26 @@ final class HeartRateReceiver: ObservableObject {
             guard let self = self else { return }
             self.shouldBeListening = false
             self.stopOnQueue()
+        }
+    }
+
+    /// Ingests a live heart rate sample from an external source such as Apple HealthKit.
+    func ingestExternalReading(bpm: Int, recordedAt: Date = Date(), source: HeartRateSource) {
+        guard Self.validBPMRange.contains(bpm) else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if source == .appleHealth,
+               let lastUDP = self.lastUDPSampleAt,
+               Date().timeIntervalSince(lastUDP) < 4.0 {
+                return
+            }
+            let reading = HeartRateReading(bpm: bpm, recordedAt: recordedAt)
+            self.currentBPM = bpm
+            self.activeSource = source
+            self.lastSampleAt = recordedAt
+            self.receivedPacketCount += 1
+            self.sampleSubject.send(reading)
+            self.ensureStalenessTimerRunning()
         }
     }
 
@@ -473,6 +512,8 @@ final class HeartRateReceiver: ObservableObject {
         guard let bpm = bpm else { return }
         let reading = HeartRateReading(bpm: bpm, recordedAt: receivedAt)
         currentBPM = bpm
+        activeSource = .udp
+        lastUDPSampleAt = receivedAt
         lastSampleAt = receivedAt
         receivedPacketCount += 1
         sampleSubject.send(reading)
@@ -485,12 +526,17 @@ final class HeartRateReceiver: ObservableObject {
             guard let self = self else { return }
             guard let lastAt = self.lastSampleAt else {
                 self.currentBPM = nil
+                self.activeSource = nil
                 self.stalenessTimer?.invalidate()
                 self.stalenessTimer = nil
                 return
             }
-            if Date().timeIntervalSince(lastAt) > Self.signalTimeoutSeconds {
+            let timeout = self.activeSource == .appleHealth
+                ? Self.appleHealthTimeoutSeconds
+                : Self.signalTimeoutSeconds
+            if Date().timeIntervalSince(lastAt) > timeout {
                 self.currentBPM = nil
+                self.activeSource = nil
                 self.stalenessTimer?.invalidate()
                 self.stalenessTimer = nil
             }

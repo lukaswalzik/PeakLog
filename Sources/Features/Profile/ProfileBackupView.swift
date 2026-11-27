@@ -10,6 +10,7 @@ struct ProfileBackupView: View {
     @EnvironmentObject private var gymStore: GymStore
     @EnvironmentObject private var wellnessStore: WellnessStore
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
+    @EnvironmentObject private var healthKitService: HealthKitService
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
     @State private var exportIncludesPhotos: Bool = false
@@ -181,6 +182,41 @@ struct ProfileBackupView: View {
                                         .foregroundColor(.green)
                                 } else {
                                     Text("OAuth2 Sync für Readiness, Schlaf, HRV & Workouts")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
+                        AppleHealthView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.text.square.fill")
+                                .font(.title3)
+                                .foregroundColor(.pink)
+                                .frame(width: 40, height: 40)
+                                .background(Color.pink.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Apple Health")
+                                    .font(.headline)
+                                if healthKitService.isConnected {
+                                    if let bpm = heartRateReceiver.currentBPM,
+                                       heartRateReceiver.activeSource == .appleHealth {
+                                        Text("Live · \(bpm) bpm · HealthKit aktiv")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Text("Verbunden · Live-HF, Schritte, HRV & Workout-Export")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
+                                } else {
+                                    Text("Live-Puls (AirPods/Watch), Gewicht & Workout-Sync")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -665,5 +701,6 @@ struct ProfileBackupView_Previews: PreviewProvider {
             .environmentObject(GymStore(database: db))
             .environmentObject(WellnessStore(database: db))
             .environmentObject(HeartRateReceiver(autoStart: false))
+            .environmentObject(HealthKitService(autoStart: false))
     }
 }

@@ -91,7 +91,7 @@ struct LiveCardioTimerView: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "heart")
                                     .font(.caption)
-                                Text("Warte auf Live-HF (UDP :\(heartRateReceiver.port))")
+                                Text("Warte auf Live-HF (Apple Health / UDP)")
                                     .font(.caption)
                             }
                             .foregroundColor(.secondary)

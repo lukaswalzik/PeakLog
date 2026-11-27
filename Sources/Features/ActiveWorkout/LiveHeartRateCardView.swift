@@ -72,7 +72,10 @@ struct LiveHeartRateCardView: View {
                             }
                         }
 
-                        Text(currentZone?.title ?? "Live-Herzfrequenz · AirPods Bridge")
+                        Text(
+                            currentZone.map { "\($0.title) · \(receiver.activeSource?.displayName ?? "Live")" }
+                                ?? "Live-Herzfrequenz · \(receiver.activeSource?.displayName ?? "Live")"
+                        )
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .lineLimit(1)
@@ -163,7 +166,7 @@ struct LiveHeartRateCardView: View {
                             .monospacedDigit()
                             .foregroundColor(.secondary)
                     } else {
-                        Text("Live-HF · wartet auf UDP \(receiver.endpointDisplay)")
+                        Text("Live-HF · wartet auf Apple Health / UDP")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .lineLimit(1)

@@ -178,5 +178,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(NutritionStore(database: db))
             .environmentObject(WellnessStore(database: db))
             .environmentObject(HeartRateReceiver(autoStart: false))
+            .environmentObject(HealthKitService(autoStart: false))
     }
 }

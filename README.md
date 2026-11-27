@@ -51,10 +51,11 @@
 - **Multi-Gym-Support & Übungsbibliothek:** Mehrere Studios/Homegyms verwalten, Gym-spezifische Geräte-/Setup-Notizen speichern, 36 integrierte Übungs-Illustrationen + eigene Übungsfotos.
 - **Workout-Recap-Cards:** Teilbare Abschlusskarten mit Dauer, Volumen, Sätzen, neuen Bestleistungen und Herzfrequenz-Zusammenfassung.
 
-### Live-Herzfrequenz (UDP) & Cardio
-- **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt UTF-8 ASCII-BPM-Werte (`30–240`, ca. 1×/Sekunde, z. B. von `airpods-hf-bridge`) ohne Cloud oder Zusatzserver.
+### Live-Herzfrequenz (Apple Health & UDP) & Cardio
+- **Apple Health (HealthKit):** Live-Herzfrequenz-Streaming in Echtzeit (z. B. von AirPods HF Bridge oder Apple Watch), Tagesübersicht (Schritte, Aktivitätskalorien, Ruhepuls, HRV), 1-Tap-Gewichtsimport sowie automatischer Export abgeschlossener Kraft- & Cardio-Workouts in Apple Health.
+- **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt zusätzlich lokale UDP-Pakete (IPv4/IPv6, UTF-8 ASCII-BPM `30–240`, ca. 1×/Sekunde) ohne Cloud oder Zusatzserver.
 - **Im Kraft-Workout:** Live-Puls in Toolbar, Banner und eigener Live-HF-Karte mit aktueller HF-Zone, Ø-/Max-Puls und Echtzeit-Sparkline; alle Messpunkte werden automatisch gespeichert und im Trainingsverlauf als **Swift-Charts-Kurve** mit HF-Zonen-Verteilung visualisiert.
-- **Cardio & Live-Cardio-Timer:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische Zonen-Erkennung per Live-Puls sowie Speicherung von Ø- und Max-Herzfrequenz.
+- **Cardio & Live-Cardio-Timer:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische Zonen-Erkennung per Live-Puls (Apple Health oder UDP) sowie Speicherung von Ø- und Max-Herzfrequenz.
 
 ### Ernährung, Wasser & Supplements
 - **Makro- & Mikronährstoffe:** Kalorien, Protein, Kohlenhydrate, Fett sowie Ballaststoffe, Zucker, Salz, Vitamin C, Kalzium und Eisen.
