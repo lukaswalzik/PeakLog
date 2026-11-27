@@ -8,7 +8,7 @@ struct HeartRateReading: Equatable {
     let recordedAt: Date
 }
 
-/// Receives live heart rate BPM values over local UDP (default: 127.0.0.1:49153),
+/// Receives live heart rate BPM values over local UDP (default port: 49153, IPv4 + IPv6 loopback/any),
 /// e.g. UTF-8 ASCII integers in 30...240 ("74") sent ~1x/second by airpods-hf-bridge.
 final class HeartRateReceiver: ObservableObject {
     static let defaultHost = "127.0.0.1"
@@ -17,9 +17,18 @@ final class HeartRateReceiver: ObservableObject {
     static let signalTimeoutSeconds: TimeInterval = 6.0
 
     private static let enabledDefaultsKey = "strongtracker.hr.udp_receiver_enabled"
+    private static let portDefaultsKey = "strongtracker.hr.udp_receiver_port"
 
     let host: String
-    let port: UInt16
+
+    @Published var port: UInt16 {
+        didSet {
+            UserDefaults.standard.set(Int(port), forKey: Self.portDefaultsKey)
+            if isEnabled {
+                restart()
+            }
+        }
+    }
 
     @Published var isEnabled: Bool {
         didSet {
@@ -36,14 +45,20 @@ final class HeartRateReceiver: ObservableObject {
     @Published private(set) var currentBPM: Int? = nil
     @Published private(set) var lastSampleAt: Date? = nil
     @Published private(set) var receivedPacketCount: Int = 0
+    @Published private(set) var rawPacketCount: Int = 0
+    @Published private(set) var lastRawPayload: String? = nil
+    @Published private(set) var lastRawPacketAt: Date? = nil
     @Published private(set) var lastError: String? = nil
 
     /// Emits every valid BPM sample received on the main queue.
     let sampleSubject = PassthroughSubject<HeartRateReading, Never>()
 
     private let socketQueue = DispatchQueue(label: "com.local.strongtracker.hr-udp", qos: .userInitiated)
-    private var readSource: DispatchSourceRead?
-    private var activeFD: Int32 = -1
+    private var readSourceV4: DispatchSourceRead?
+    private var readSourceV6: DispatchSourceRead?
+    private var activeFDV4: Int32 = -1
+    private var activeFDV6: Int32 = -1
+    private var boundPort: UInt16 = HeartRateReceiver.defaultPort
     private var shouldBeListening: Bool = false
     private var stalenessTimer: Timer?
     private var foregroundObserver: NSObjectProtocol?
@@ -58,11 +73,24 @@ final class HeartRateReceiver: ObservableObject {
 
     init(
         host: String = HeartRateReceiver.defaultHost,
-        port: UInt16 = HeartRateReceiver.defaultPort,
+        port: UInt16? = nil,
         autoStart: Bool = true
     ) {
         self.host = host
-        self.port = port
+
+        let resolvedPort: UInt16
+        if let explicitPort = port {
+            resolvedPort = explicitPort
+        } else {
+            let storedPort = UserDefaults.standard.integer(forKey: Self.portDefaultsKey)
+            if storedPort >= 1024 && storedPort <= 65535 {
+                resolvedPort = UInt16(storedPort)
+            } else {
+                resolvedPort = Self.defaultPort
+            }
+        }
+        self.port = resolvedPort
+        self.boundPort = resolvedPort
 
         let storedEnabled: Bool
         if UserDefaults.standard.object(forKey: Self.enabledDefaultsKey) == nil {
@@ -93,16 +121,17 @@ final class HeartRateReceiver: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         stalenessTimer?.invalidate()
-        if let source = readSource {
-            source.cancel()
-        }
+        readSourceV4?.cancel()
+        readSourceV6?.cancel()
     }
 
     // MARK: - Lifecycle
 
     func start() {
+        let targetPort = port
         socketQueue.async { [weak self] in
             guard let self = self else { return }
+            self.boundPort = targetPort
             self.shouldBeListening = true
             self.startOnQueue()
         }
@@ -125,8 +154,10 @@ final class HeartRateReceiver: ObservableObject {
     }
 
     func restart() {
+        let targetPort = port
         socketQueue.async { [weak self] in
             guard let self = self else { return }
+            self.boundPort = targetPort
             self.shouldBeListening = true
             self.stopOnQueue { [weak self] in
                 guard let self = self, self.shouldBeListening else { return }
@@ -135,34 +166,144 @@ final class HeartRateReceiver: ObservableObject {
         }
     }
 
+    /// Sends a local loopback UDP test datagram (e.g. "74") to verify the receiver end-to-end.
+    func sendTestPacket(bpm: Int = 74) {
+        let targetPort = port
+        let payload = Array("\(bpm)".utf8)
+        socketQueue.async {
+            let txFD = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+            guard txFD >= 0 else { return }
+            defer { Darwin.close(txFD) }
+
+            var dest = sockaddr_in()
+            dest.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+            dest.sin_family = sa_family_t(AF_INET)
+            dest.sin_port = targetPort.bigEndian
+            let ok = "127.0.0.1".withCString { cStr in
+                Darwin.inet_pton(AF_INET, cStr, &dest.sin_addr)
+            }
+            guard ok == 1 else { return }
+
+            _ = payload.withUnsafeBytes { rawBuf in
+                withUnsafePointer(to: &dest) { destPtr in
+                    destPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                        Darwin.sendto(
+                            txFD,
+                            rawBuf.baseAddress,
+                            rawBuf.count,
+                            0,
+                            sockaddrPtr,
+                            socklen_t(MemoryLayout<sockaddr_in>.size)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Parsing
 
-    /// Parses UTF-8 ASCII BPM payloads in 30...240 (e.g. "74" or "74\n").
+    /// Parses UTF-8 ASCII BPM payloads in 30...240 (e.g. "74", "74\n", "74.0", "74 bpm", or JSON {"bpm":74}).
     static func parseBPM(from data: Data) -> Int? {
-        guard !data.isEmpty, data.count <= 64 else { return nil }
-        guard let raw = String(data: data, encoding: .utf8) else { return nil }
-        let trimChars = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\0"))
-        let trimmed = raw.trimmingCharacters(in: trimChars)
-        guard !trimmed.isEmpty else { return nil }
-        guard trimmed.unicodeScalars.allSatisfy({ $0.value >= 48 && $0.value <= 57 }) else {
+        guard !data.isEmpty, data.count <= 256 else { return nil }
+
+        if let raw = String(data: data, encoding: .utf8) {
+            let trimChars = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\0"))
+            let trimmed = raw.trimmingCharacters(in: trimChars)
+            guard !trimmed.isEmpty else { return nil }
+
+            // Fast path 1: strict ASCII integer ("74")
+            if trimmed.unicodeScalars.allSatisfy({ $0.value >= 48 && $0.value <= 57 }),
+               let exact = Int(trimmed),
+               validBPMRange.contains(exact) {
+                return exact
+            }
+
+            // Fast path 2: decimal number ("74.0" or "74,5")
+            let normalizedDecimal = trimmed.replacingOccurrences(of: ",", with: ".")
+            if let dbl = Double(normalizedDecimal) {
+                let rounded = Int(dbl.rounded())
+                if validBPMRange.contains(rounded) {
+                    return rounded
+                }
+            }
+
+            // Fallback: extract first numeric token in valid BPM range (e.g. "74 bpm" or {"bpm": 74})
+            var token = ""
+            func evaluateToken() -> Int? {
+                defer { token = "" }
+                guard !token.isEmpty else { return nil }
+                let cleaned = token.replacingOccurrences(of: ",", with: ".")
+                guard let val = Double(cleaned) else { return nil }
+                let rounded = Int(val.rounded())
+                return validBPMRange.contains(rounded) ? rounded : nil
+            }
+
+            for scalar in trimmed.unicodeScalars {
+                let v = scalar.value
+                let isAsciiDigit = v >= 48 && v <= 57
+                if isAsciiDigit || (v == 46 && !token.isEmpty) || (v == 44 && !token.isEmpty) {
+                    token.unicodeScalars.append(scalar)
+                } else if let found = evaluateToken() {
+                    return found
+                }
+            }
+            if let found = evaluateToken() {
+                return found
+            }
             return nil
         }
-        guard let bpm = Int(trimmed), validBPMRange.contains(bpm) else {
-            return nil
+
+        // Binary single-byte fallback if payload is non-UTF-8
+        if data.count == 1 {
+            let val = Int(data[0])
+            return validBPMRange.contains(val) ? val : nil
         }
-        return bpm
+        return nil
+    }
+
+    private static func describeRawPayload(_ data: Data) -> String {
+        if let str = String(data: data, encoding: .utf8) {
+            let cleaned = str
+                .replacingOccurrences(of: "\r", with: "\\r")
+                .replacingOccurrences(of: "\n", with: "\\n")
+                .replacingOccurrences(of: "\0", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if !cleaned.isEmpty {
+                return String(cleaned.prefix(48))
+            }
+        }
+        return data.prefix(16).map { String(format: "%02X", $0) }.joined(separator: " ")
     }
 
     // MARK: - Socket Implementation (socketQueue)
 
     private func startOnQueue() {
-        guard readSource == nil else { return }
+        guard readSourceV4 == nil && readSourceV6 == nil else { return }
 
+        let v4Result = openIPv4Socket(port: boundPort)
+        let v6Result = openIPv6Socket(port: boundPort)
+
+        if v4Result.source == nil && v6Result.source == nil {
+            let reason = v4Result.error ?? v6Result.error ?? "Unbekannter Fehler"
+            publishSocketState(isListening: false, error: "Bind auf Port \(boundPort) fehlgeschlagen (\(reason))")
+            return
+        }
+
+        readSourceV4 = v4Result.source
+        activeFDV4 = v4Result.fd
+        readSourceV6 = v6Result.source
+        activeFDV6 = v6Result.fd
+
+        readSourceV4?.resume()
+        readSourceV6?.resume()
+        publishSocketState(isListening: true, error: nil)
+    }
+
+    private func openIPv4Socket(port: UInt16) -> (source: DispatchSourceRead?, fd: Int32, error: String?) {
         let fd = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else {
-            let reason = Self.errnoDescription(Darwin.errno)
-            publishSocketState(isListening: false, error: "UDP-Socket fehlgeschlagen (\(reason))")
-            return
+            return (nil, -1, Self.errnoDescription(Darwin.errno))
         }
 
         var reuseAddr: Int32 = 1
@@ -170,18 +311,12 @@ final class HeartRateReceiver: ObservableObject {
         var reusePort: Int32 = 1
         _ = Darwin.setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reusePort, socklen_t(MemoryLayout<Int32>.size))
 
+        // Bind to INADDR_ANY (0.0.0.0) so packets sent to 127.0.0.1 or any local IPv4 address are received.
         var addr = sockaddr_in()
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
-        let ptonStatus = host.withCString { cString in
-            Darwin.inet_pton(AF_INET, cString, &addr.sin_addr)
-        }
-        guard ptonStatus == 1 else {
-            Darwin.close(fd)
-            publishSocketState(isListening: false, error: "Ungültige Adresse \(host)")
-            return
-        }
+        addr.sin_addr = in_addr(s_addr: INADDR_ANY.bigEndian)
 
         let bindStatus: Int32 = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
@@ -192,55 +327,105 @@ final class HeartRateReceiver: ObservableObject {
         guard bindStatus == 0 else {
             let reason = Self.errnoDescription(Darwin.errno)
             Darwin.close(fd)
-            publishSocketState(isListening: false, error: "Bind auf \(host):\(port) fehlgeschlagen (\(reason))")
-            return
+            return (nil, -1, reason)
         }
 
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: socketQueue)
         source.setEventHandler { [weak self] in
-            self?.drainSocketOnQueue(fd: fd)
+            self?.drainSocketOnQueue(fd: fd, isIPv6: false)
         }
         source.setCancelHandler {
             Darwin.close(fd)
         }
+        return (source, fd, nil)
+    }
 
-        self.activeFD = fd
-        self.readSource = source
-        source.resume()
-        publishSocketState(isListening: true, error: nil)
+    private func openIPv6Socket(port: UInt16) -> (source: DispatchSourceRead?, fd: Int32, error: String?) {
+        let fd = Darwin.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
+        guard fd >= 0 else {
+            return (nil, -1, Self.errnoDescription(Darwin.errno))
+        }
+
+        var reuseAddr: Int32 = 1
+        _ = Darwin.setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuseAddr, socklen_t(MemoryLayout<Int32>.size))
+        var reusePort: Int32 = 1
+        _ = Darwin.setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reusePort, socklen_t(MemoryLayout<Int32>.size))
+        var v6Only: Int32 = 1
+        _ = Darwin.setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6Only, socklen_t(MemoryLayout<Int32>.size))
+
+        // Zero-initialized sin6_addr is :: (in6addr_any), receiving ::1 and any local IPv6 address.
+        var addr = sockaddr_in6()
+        addr.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
+        addr.sin6_family = sa_family_t(AF_INET6)
+        addr.sin6_port = port.bigEndian
+
+        let bindStatus: Int32 = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                Darwin.bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in6>.size))
+            }
+        }
+
+        guard bindStatus == 0 else {
+            let reason = Self.errnoDescription(Darwin.errno)
+            Darwin.close(fd)
+            return (nil, -1, reason)
+        }
+
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: socketQueue)
+        source.setEventHandler { [weak self] in
+            self?.drainSocketOnQueue(fd: fd, isIPv6: true)
+        }
+        source.setCancelHandler {
+            Darwin.close(fd)
+        }
+        return (source, fd, nil)
     }
 
     private func stopOnQueue(completion: (() -> Void)? = nil) {
-        guard let source = readSource else {
+        let sources: [(DispatchSourceRead, Int32)] = [
+            readSourceV4.map { ($0, activeFDV4) },
+            readSourceV6.map { ($0, activeFDV6) }
+        ].compactMap { $0 }
+
+        readSourceV4 = nil
+        readSourceV6 = nil
+        activeFDV4 = -1
+        activeFDV6 = -1
+
+        guard !sources.isEmpty else {
             completion?()
             return
         }
-        let fd = activeFD
-        readSource = nil
-        activeFD = -1
-        source.setEventHandler {}
-        source.setCancelHandler {
-            if fd >= 0 {
-                Darwin.close(fd)
+
+        var remaining = sources.count
+        for (source, fd) in sources {
+            source.setEventHandler {}
+            source.setCancelHandler {
+                if fd >= 0 {
+                    Darwin.close(fd)
+                }
+                remaining -= 1
+                if remaining == 0 {
+                    completion?()
+                }
             }
-            completion?()
+            source.cancel()
         }
-        source.cancel()
     }
 
-    private func drainSocketOnQueue(fd: Int32) {
-        var buffer = [UInt8](repeating: 0, count: 128)
+    private func drainSocketOnQueue(fd: Int32, isIPv6: Bool) {
+        var buffer = [UInt8](repeating: 0, count: 256)
         var iterations = 0
         while iterations < 64 {
             iterations += 1
             let bytesRead = Darwin.recv(fd, &buffer, buffer.count, MSG_DONTWAIT)
             if bytesRead > 0 {
                 let payload = Data(bytes: buffer, count: bytesRead)
-                if let bpm = Self.parseBPM(from: payload) {
-                    let reading = HeartRateReading(bpm: bpm, recordedAt: Date())
-                    DispatchQueue.main.async { [weak self] in
-                        self?.handleValidReadingOnMain(reading)
-                    }
+                let now = Date()
+                let rawPreview = Self.describeRawPayload(payload)
+                let parsedBPM = Self.parseBPM(from: payload)
+                DispatchQueue.main.async { [weak self] in
+                    self?.handleDatagramOnMain(bpm: parsedBPM, rawPreview: rawPreview, receivedAt: now)
                 }
             } else if bytesRead < 0 {
                 let err = Darwin.errno
@@ -250,12 +435,21 @@ final class HeartRateReceiver: ObservableObject {
                 if err == EINTR {
                     continue
                 }
-                let reason = Self.errnoDescription(err)
-                publishSocketState(isListening: false, error: "UDP-Empfangsfehler (\(reason))")
-                stopOnQueue()
+                if isIPv6 {
+                    readSourceV6?.cancel()
+                    readSourceV6 = nil
+                    activeFDV6 = -1
+                } else {
+                    readSourceV4?.cancel()
+                    readSourceV4 = nil
+                    activeFDV4 = -1
+                }
+                if readSourceV4 == nil && readSourceV6 == nil {
+                    let reason = Self.errnoDescription(err)
+                    publishSocketState(isListening: false, error: "UDP-Empfangsfehler (\(reason))")
+                }
                 break
             } else {
-                // 0-byte UDP datagram: ignore and check if further packets are queued.
                 continue
             }
         }
@@ -269,12 +463,18 @@ final class HeartRateReceiver: ObservableObject {
         }
     }
 
-    private func handleValidReadingOnMain(_ reading: HeartRateReading) {
+    private func handleDatagramOnMain(bpm: Int?, rawPreview: String, receivedAt: Date) {
         guard isEnabled else { return }
-        currentBPM = reading.bpm
-        lastSampleAt = reading.recordedAt
-        receivedPacketCount += 1
+        rawPacketCount += 1
+        lastRawPayload = rawPreview
+        lastRawPacketAt = receivedAt
         lastError = nil
+
+        guard let bpm = bpm else { return }
+        let reading = HeartRateReading(bpm: bpm, recordedAt: receivedAt)
+        currentBPM = bpm
+        lastSampleAt = receivedAt
+        receivedPacketCount += 1
         sampleSubject.send(reading)
         ensureStalenessTimerRunning()
     }

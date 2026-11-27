@@ -10,6 +10,7 @@ struct LiveCardioTimerView: View {
 
     @State private var activityType: CardioActivityType = .running
     @State private var currentZone: HeartRateZone = .z2
+    @State private var autoZoneEnabled: Bool = true
     @State private var isRunning: Bool = true
     @State private var startedAt: Date = Date()
     @State private var elapsedSeconds: Int = 0
@@ -20,6 +21,10 @@ struct LiveCardioTimerView: View {
     @State private var hrBpmSum: Int = 0
     @State private var hrMaxBpm: Int? = nil
     @State private var ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var isAutoZoneActive: Bool {
+        autoZoneEnabled && heartRateReceiver.hasLiveSignal
+    }
 
     private var avgRecordedHeartRate: Int? {
         guard hrSampleCount > 0 else { return nil }
@@ -82,6 +87,15 @@ struct LiveCardioTimerView: View {
                                 }
                             }
                             .padding(.top, 2)
+                        } else if autoZoneEnabled {
+                            HStack(spacing: 5) {
+                                Image(systemName: "heart")
+                                    .font(.caption)
+                                Text("Warte auf Live-HF (UDP :\(heartRateReceiver.port))")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
                         }
 
                         HStack(spacing: 6) {
@@ -101,21 +115,33 @@ struct LiveCardioTimerView: View {
                     .padding(.vertical, 24)
                     .strongCard()
 
-                    // Zone selector buttons
+                    // Auto-Zone toggle + zone display
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(heartRateReceiver.hasLiveSignal ? "HF-Zone (automatisch via Live-Puls)" : "Aktuelle HF-Zone antippen")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
+                        Toggle(isOn: $autoZoneEnabled) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("HF-Zone automatisch nach Puls")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text(
+                                    isAutoZoneActive
+                                        ? "Aktiv · Zone wechselt automatisch (Max-HF \(cardioStore.maxHeartRate) bpm)"
+                                        : (autoZoneEnabled
+                                            ? "Bereit · übernimmt automatisch sobald Live-Puls ankommt (aktuell manuell wählbar)"
+                                            : "Aus · tippe eine Zone manuell an")
+                                )
+                                .font(.caption)
                                 .foregroundColor(.secondary)
-                            Spacer()
+                            }
                         }
-                        .padding(.horizontal, 4)
+                        .padding(12)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                         ForEach(HeartRateZone.allCases) { zone in
                             let secs = zoneSeconds[zone] ?? 0
                             let isSelected = currentZone == zone
                             Button {
+                                guard !isAutoZoneActive else { return }
                                 currentZone = zone
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             } label: {
@@ -129,10 +155,22 @@ struct LiveCardioTimerView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(zone.title)
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
+                                        HStack(spacing: 6) {
+                                            Text(zone.title)
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.primary)
+                                            if isSelected && isAutoZoneActive {
+                                                Text("AUTO")
+                                                    .font(.caption2)
+                                                    .fontWeight(.heavy)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(zone.color.opacity(0.2))
+                                                    .foregroundColor(zone.color)
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
                                         Text(zone.bpmRangeText(maxHR: cardioStore.maxHeartRate))
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -199,6 +237,11 @@ struct LiveCardioTimerView: View {
                     }
                 }
             }
+            .onAppear {
+                if autoZoneEnabled, let bpm = heartRateReceiver.currentBPM {
+                    currentZone = HeartRateZone.clampedZone(for: bpm, maxHR: cardioStore.maxHeartRate)
+                }
+            }
             .onReceive(ticker) { _ in
                 guard isRunning else { return }
                 elapsedSeconds += 1
@@ -209,7 +252,9 @@ struct LiveCardioTimerView: View {
                 hrSampleCount += 1
                 hrBpmSum += reading.bpm
                 hrMaxBpm = hrMaxBpm.map { max($0, reading.bpm) } ?? reading.bpm
-                currentZone = HeartRateZone.clampedZone(for: reading.bpm, maxHR: cardioStore.maxHeartRate)
+                if autoZoneEnabled {
+                    currentZone = HeartRateZone.clampedZone(for: reading.bpm, maxHR: cardioStore.maxHeartRate)
+                }
             }
         }
     }

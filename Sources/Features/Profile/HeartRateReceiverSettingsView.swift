@@ -5,6 +5,7 @@ struct HeartRateReceiverSettingsView: View {
     @EnvironmentObject private var cardioStore: CardioStore
 
     @State private var isPulsing: Bool = false
+    @State private var portDraft: String = ""
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -25,13 +26,21 @@ struct HeartRateReceiverSettingsView: View {
         if let error = heartRateReceiver.lastError { return error }
         if !heartRateReceiver.isEnabled { return "Deaktiviert" }
         if heartRateReceiver.hasLiveSignal { return "Live-Signal aktiv" }
-        if heartRateReceiver.isListening { return "Lauscht auf UDP-Pakete" }
+        if heartRateReceiver.isListening { return "Lauscht auf UDP :\(heartRateReceiver.port) (IPv4 + IPv6)" }
         return "Wird gestartet…"
     }
 
     private var currentZone: HeartRateZone? {
         guard let bpm = heartRateReceiver.currentBPM else { return nil }
         return HeartRateZone.zone(for: bpm, maxHR: cardioStore.maxHeartRate)
+    }
+
+    private var parsedDraftPort: UInt16? {
+        guard let val = Int(portDraft.trimmingCharacters(in: .whitespacesAndNewlines)),
+              val >= 1024 && val <= 65535 else {
+            return nil
+        }
+        return UInt16(val)
     }
 
     var body: some View {
@@ -71,7 +80,7 @@ struct HeartRateReceiverSettingsView: View {
                         Text("– bpm")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundColor(.secondary)
-                        Text("Warte auf Daten von airpods-hf-bridge")
+                        Text("Warte auf UDP-Pakete auf Port \(heartRateReceiver.port)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -83,6 +92,7 @@ struct HeartRateReceiverSettingsView: View {
                         Text(statusText)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
                     }
                     .padding(.top, 2)
                 }
@@ -91,12 +101,18 @@ struct HeartRateReceiverSettingsView: View {
             }
 
             Section(
-                header: Text("Empfänger"),
-                footer: Text("Empfängt lokale UDP-Datagramme (UTF-8 ASCII-BPM 30–240, z. B. \"74\", ca. 1×/Sekunde) und zeigt bzw. speichert die Herzfrequenz automatisch in aktiven Kraft-Workouts und im Live-Cardio-Timer.")
+                header: Text("Empfänger & Selbsttest"),
+                footer: Text("Tippe auf „Test-Paket senden“, um zu prüfen, ob der UDP-Empfänger in StrongTracker lokal empfängt. Wenn der Test 74 bpm anzeigt, aber von airpods-hf-bridge 0 Roh-Pakete ankommen, sendet die Bridge im Hintergrund nicht auf Port \(heartRateReceiver.port) (z. B. weil iOS die Bridge beim App-Wechsel pausiert).")
             ) {
                 Toggle("Live-HF-Empfänger aktiv", isOn: $heartRateReceiver.isEnabled)
 
                 if heartRateReceiver.isEnabled {
+                    Button {
+                        heartRateReceiver.sendTestPacket(bpm: 74)
+                    } label: {
+                        Label("Test-Paket senden (74 bpm → 127.0.0.1:\(heartRateReceiver.port))", systemImage: "paperplane.fill")
+                    }
+
                     Button {
                         heartRateReceiver.restart()
                     } label: {
@@ -105,26 +121,55 @@ struct HeartRateReceiverSettingsView: View {
                 }
             }
 
-            Section(header: Text("Verbindungsdetails")) {
+            Section(header: Text("UDP-Port")) {
                 HStack {
-                    Text("Endpunkt")
+                    Text("Port")
                     Spacer()
-                    Text("\(heartRateReceiver.endpointDisplay) (UDP)")
+                    TextField("49153", text: $portDraft)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                        .monospacedDigit()
+                    if let newPort = parsedDraftPort, newPort != heartRateReceiver.port {
+                        Button("Übernehmen") {
+                            heartRateReceiver.port = newPort
+                        }
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                if heartRateReceiver.port != HeartRateReceiver.defaultPort {
+                    Button("Standard-Port 49153 wiederherstellen") {
+                        heartRateReceiver.port = HeartRateReceiver.defaultPort
+                        portDraft = "\(HeartRateReceiver.defaultPort)"
+                    }
+                    .font(.caption)
+                }
+            }
+
+            Section(header: Text("Diagnose")) {
+                HStack {
+                    Text("Lauscht auf")
+                    Spacer()
+                    Text("0.0.0.0 & [::]:\(heartRateReceiver.port) (UDP)")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(.secondary)
+                }
+
+                HStack {
+                    Text("Empfangene Roh-Pakete")
+                    Spacer()
+                    Text("\(heartRateReceiver.rawPacketCount)")
                         .font(.subheadline)
                         .monospacedDigit()
                         .foregroundColor(.secondary)
                 }
 
                 HStack {
-                    Text("Payload")
-                    Spacer()
-                    Text("UTF-8 ASCII · 30–240 bpm")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text("Empfangene Pakete")
+                    Text("Gültige BPM-Werte")
                     Spacer()
                     Text("\(heartRateReceiver.receivedPacketCount)")
                         .font(.subheadline)
@@ -133,9 +178,19 @@ struct HeartRateReceiverSettingsView: View {
                 }
 
                 HStack {
-                    Text("Letztes Signal")
+                    Text("Letzter Roh-Payload")
                     Spacer()
-                    if let last = heartRateReceiver.lastSampleAt {
+                    Text(heartRateReceiver.lastRawPayload ?? "–")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack {
+                    Text("Letztes Paket")
+                    Spacer()
+                    if let last = heartRateReceiver.lastRawPacketAt {
                         Text(Self.timeFormatter.string(from: last))
                             .font(.subheadline)
                             .monospacedDigit()
@@ -151,6 +206,9 @@ struct HeartRateReceiverSettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Live-Herzfrequenz (UDP)")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            portDraft = "\(heartRateReceiver.port)"
+        }
         .onChange(of: heartRateReceiver.receivedPacketCount) { _ in
             withAnimation(.easeOut(duration: 0.14)) {
                 isPulsing = true
