@@ -478,9 +478,15 @@ struct ProfileBackupView: View {
                 }
 
                 Section(
-                    header: Text("Lokales Backup (JSON)"),
-                    footer: Text("Das Komplett-Backup bettet zusätzlich alle eigenen Übungs- und Fortschrittsfotos direkt in die Backup-Datei ein.")
+                    header: Text("Import & Lokales Backup"),
+                    footer: Text("Der Strong-Import fügt Trainings aus einer Strong-CSV-Datei hinzu, ohne bestehende Daten zu überschreiben. Das JSON-Komplett-Backup bettet zusätzlich alle eigenen Übungs- und Fortschrittsfotos ein.")
                 ) {
+                    NavigationLink {
+                        StrongImportView()
+                    } label: {
+                        Label("Aus Strong-App importieren (CSV)", systemImage: "arrow.down.doc.fill")
+                    }
+
                     Button {
                         prepareExport(includePhotos: false)
                     } label: {

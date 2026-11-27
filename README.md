@@ -72,8 +72,9 @@
 - **Körperfortschritt:** Körpergewicht mit Vorher/Nachher-Foto-Vergleich, Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.
 - **Motivation & Analyse:** Fortschritts-Dashboard (1RM- & Gewichtstrends), wöchentliche Muskel-Heatmap, Kraftstandards, **StrongTracker Wrapped**, Trainingskalender, Level/XP/Streaks, Meilensteine und lokale Erinnerungen.
 
-### Datenschutz & Lokales Backup
+### Datenschutz, Import & Lokales Backup
 - **100 % Local-First:** Alle Daten liegen in einer lokalen SQLite-Datenbank auf dem iPhone; API-Keys und OAuth-Tokens werden lokal gespeichert und nur bei Nutzung direkt an die jeweilige API (Mistral / Oura / Open Food Facts) gesendet.
+- **Strong-App CSV-Import:** Direkter Umstieg aus der Strong-App (`strong.csv`, v5 & v6, EN/DE, `,` oder `;`, kg & lbs) mit Vorschau, automatischer Übungszuordnung, RPE→RIR-Konvertierung und Duplikat-Erkennung – bestehende Daten bleiben erhalten.
 - **JSON-Komplett-Backup:** Export & Import aller Trainings-, Ernährungs-, Herzfrequenz- und Wellness-Daten — optional inkl. aller eigenen Übungs- und Fortschrittsfotos.
 
 ---
