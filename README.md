@@ -1,1 +1,156 @@
-# strong-tracker
+<p align="center">
+  <img src="docs/screenshots/banner.jpg" alt="StrongTracker Banner" width="100%" />
+</p>
+
+<h1 align="center">StrongTracker</h1>
+
+<p align="center">
+  <strong>Native iOS Fitness-, Ernährungs-, Wellness- & Live-Herzfrequenz-App</strong><br/>
+  100 % lokal (SQLite/GRDB) · Kein Abo · Keine Cloud-Pflicht · Gebaut für iOS 16.5+ & TrollStore
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/iOS-16.5%2B-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="iOS 16.5+" />
+  <img src="https://img.shields.io/badge/Swift-5%20%7C%20SwiftUI-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 5 SwiftUI" />
+  <img src="https://img.shields.io/badge/Database-GRDB%20%2F%20SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite GRDB" />
+  <img src="https://img.shields.io/badge/Distribution-TrollStore%20IPA-5856D6?style=for-the-badge" alt="TrollStore IPA" />
+  <a href="https://github.com/Peterpimmle/strong-tracker/actions/workflows/build-ipa.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Peterpimmle/strong-tracker/build-ipa.yml?branch=main&style=for-the-badge&label=IPA%20Build" alt="IPA Build Status" />
+  </a>
+</p>
+
+---
+
+## Vorschau
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/active-workout.jpg" alt="Aktives Workout mit Live-Herzfrequenz" width="260" /><br/>
+      <sub><b>Aktives Training & Live-Puls</b><br/>Live-UDP-HF, Sparkline, Progression, RIR, PR-Badges & Pausentimer</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/nutrition-ai.jpg" alt="Ernährung, Makros & KI-Scanner" width="260" /><br/>
+      <sub><b>Ernährung & KI-Scanner</b><br/>Kalorien, Makros, Mistral-Foto/Barcode, Wasser & Supplements</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/screenshots/analytics-oura.jpg" alt="Fortschritt, HF-Verlauf & Oura Ring" width="260" /><br/>
+      <sub><b>Analyse, HF-Charts & Oura Ring</b><br/>Readiness, Schlaf, HRV, Puls-Kurve, HF-Zonen & 1RM-Trends</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## Funktionsumfang
+
+### Krafttraining & Smart Coaching
+- **Routinen & Vorlagen:** Eigene Trainingspläne erstellen, sortieren, per **Deload-Modus** (−20 % Gewicht, reduziertes Volumen) starten und nach dem Training direkt aktualisieren.
+- **Aktives Workout-Logging:** Vorherige Sätze pro Gym im Blick, Satztypen (`Arbeitssatz`, `Aufwärmsatz`, `Dropset`, `Muskelversagen`), **RIR-Tracking**, **Supersätze**, Aufwärmsatz-Generator und schnelles Ersetzen besetzter Geräte.
+- **Smart Progression & Live-PRs:** Automatische Double-Progression-Empfehlungen, Live-PR-Erkennung (geschätztes 1RM nach Epley), automatischer **Pausentimer** inkl. lokaler Benachrichtigungen und minimierbarem Workout-Banner.
+- **Multi-Gym-Support & Übungsbibliothek:** Mehrere Studios/Homegyms verwalten, Gym-spezifische Geräte-/Setup-Notizen speichern, 36 integrierte Übungs-Illustrationen + eigene Übungsfotos.
+- **Workout-Recap-Cards:** Teilbare Abschlusskarten mit Dauer, Volumen, Sätzen, neuen Bestleistungen und Herzfrequenz-Zusammenfassung.
+
+### Live-Herzfrequenz (UDP) & Cardio
+- **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt UTF-8 ASCII-BPM-Werte (`30–240`, ca. 1×/Sekunde, z. B. von `airpods-hf-bridge`) ohne Cloud oder Zusatzserver.
+- **Im Kraft-Workout:** Live-Puls in Toolbar, Banner und eigener Live-HF-Karte mit aktueller HF-Zone, Ø-/Max-Puls und Echtzeit-Sparkline; alle Messpunkte werden automatisch gespeichert und im Trainingsverlauf als **Swift-Charts-Kurve** mit HF-Zonen-Verteilung visualisiert.
+- **Cardio & Live-Cardio-Timer:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische Zonen-Erkennung per Live-Puls sowie Speicherung von Ø- und Max-Herzfrequenz.
+
+### Ernährung, Wasser & Supplements
+- **Makro- & Mikronährstoffe:** Kalorien, Protein, Kohlenhydrate, Fett sowie Ballaststoffe, Zucker, Salz, Vitamin C, Kalzium und Eisen.
+- **Schnelles Logging:** **Open Food Facts**-Suche, integrierter **Barcode-Scanner**, eigene Lebensmittel, Favoriten, gespeicherte Mahlzeiten, Tages-Templates und „Mahlzeit von gestern kopieren“.
+- **Bedarfs- & TDEE-Rechner:** Mifflin-St-Jeor-Rechner, **adaptiver TDEE** aus Gewichts- & Kalorienverlauf, Makro-Helfer und 7-Tage-Ernährungstrend.
+- **Hydration & Supplements:** Täglicher Wasser-Tracker mit Tagesziel sowie abhakbare Supplement-Liste (Kreatin, Vitamin D3+K2, Omega-3, Magnesium & eigene).
+
+### Mistral KI-Assistent *(optional, Bring Your Own Key)*
+- **KI-Mahlzeiten-Scanner (Vision):** Foto vom Teller oder Nährwertetikett (OCR) aufnehmen und automatisch als Nährwerte übernehmen.
+- **Freitext-Logging & Rezept-Chef:** Mahlzeiten in natürlicher Sprache eintragen oder Rezepte passend zu den offenen Rest-Makros generieren lassen.
+- **KI-Coach & Trainingsplan-Generator:** Datenbasierte Trainings-/Ernährungsanalysen, Post-Workout-Feedback und komplette Trainingspläne per 1-Tap als Routinen speicherbar (Mistral Small 4 / Large 4).
+
+### Wellness, Oura Ring & Fortschritt
+- **Oura Ring (API v2, OAuth2):** Synchronisiert Readiness, Schlaf, HRV, Ruhepuls, Aktivität, Stress, SpO2 und Workouts direkt in die App.
+- **Körperfortschritt:** Körpergewicht mit Vorher/Nachher-Foto-Vergleich, Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.
+- **Motivation & Analyse:** Fortschritts-Dashboard (1RM- & Gewichtstrends), wöchentliche Muskel-Heatmap, Kraftstandards, **StrongTracker Wrapped**, Trainingskalender, Level/XP/Streaks, Meilensteine und lokale Erinnerungen.
+
+### Datenschutz & Lokales Backup
+- **100 % Local-First:** Alle Daten liegen in einer lokalen SQLite-Datenbank auf dem iPhone; API-Keys und OAuth-Tokens werden lokal gespeichert und nur bei Nutzung direkt an die jeweilige API (Mistral / Oura / Open Food Facts) gesendet.
+- **JSON-Komplett-Backup:** Export & Import aller Trainings-, Ernährungs-, Herzfrequenz- und Wellness-Daten — optional inkl. aller eigenen Übungs- und Fortschrittsfotos.
+
+---
+
+## Live-Herzfrequenz per UDP (`airpods-hf-bridge`)
+
+StrongTracker lauscht standardmäßig (ein-/ausschaltbar unter **Profil → Live-Herzfrequenz (UDP)**) auf lokalem Loopback-UDP:
+
+| Parameter | Wert |
+| --- | --- |
+| **Adresse / Port** | `127.0.0.1:49153` (UDP) |
+| **Payload** | UTF-8 ASCII-Ganzzahl `30`–`240` (z. B. `"74"`, optional mit `\n`) |
+| **Intervall** | ca. 1× / Sekunde (Signal-Timeout nach 6 s ohne Paket) |
+
+Lokaler Schnelltest (z. B. per Shell/Simulator):
+
+```bash
+printf "132" | nc -u -w1 127.0.0.1 49153
+```
+
+---
+
+## Installation (TrollStore / Sideloading)
+
+### Option 1: Vorgefertigte `.ipa` aus GitHub Actions
+1. Öffne den Tab **[Actions](https://github.com/Peterpimmle/strong-tracker/actions/workflows/build-ipa.yml)** und wähle den letzten erfolgreichen Lauf von **Build Unsigned IPA**.
+2. Lade das Artifact **`StrongTracker-ipa`** herunter und entpacke die `.zip`-Datei.
+3. Installiere `StrongTracker.ipa` direkt über **TrollStore** (oder signiere sie über AltStore / SideStore / Sideloadly).
+
+> **Wichtig bei Updates:** Die feste Bundle-ID `com.local.strongtracker` sorgt dafür, dass deine lokale Datenbank und Fotos beim Drüberinstallieren neuer Versionen erhalten bleiben.
+
+### Option 2: Selbst mit XcodeGen bauen (macOS)
+
+Voraussetzungen: macOS mit Xcode (iOS 16.5+ SDK) und [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+
+```bash
+git clone https://github.com/Peterpimmle/strong-tracker.git
+cd strong-tracker
+
+brew install xcodegen
+xcodegen generate
+open StrongTracker.xcodeproj
+```
+
+Oder als unsignierter Release-Build per Kommandozeile (wie in CI):
+
+```bash
+xcodegen generate
+xcodebuild \
+  -project StrongTracker.xcodeproj \
+  -scheme StrongTracker \
+  -configuration Release \
+  -sdk iphoneos \
+  -derivedDataPath build \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY="" \
+  build
+```
+
+---
+
+## Tech-Stack & Architektur
+
+- **UI:** SwiftUI (strikt kompatibel ab **iOS 16.5**), `NavigationStack`, `ObservableObject` / `@StateObject` / `@EnvironmentObject`
+- **Diagramme:** Swift Charts
+- **Persistenz:** [GRDB.swift](https://github.com/groue/GRDB.swift) (SQLite mit versionierten Migrationen `v1`–`v12`)
+- **Netzwerk:** `URLSession` (Open Food Facts, Mistral API, Oura API v2) & `Darwin` BSD UDP Socket + `DispatchSourceRead` für Live-Herzfrequenz
+- **Projektverwaltung:** [XcodeGen](https://github.com/yonaskolb/XcodeGen) ([`project.yml`](project.yml)) – keine `.xcodeproj`-Dateien im Repository
+- **CI/CD:** GitHub Actions ([`.github/workflows/build-ipa.yml`](.github/workflows/build-ipa.yml)) baut bei jedem Push auf `main` automatisch `StrongTracker.ipa`
+
+```text
+Sources/
+├── App/          # StrongTrackerApp, RootTabView & ActiveWorkoutBanner
+├── Database/     # AppDatabase, Migrations (v1–v12), SeedData, SeedFoods
+├── Models/       # Workout, HeartRateSample, CardioSession, Nutrition, Wellness, BackupPayload
+├── Services/     # ActiveWorkoutManager, HeartRateReceiver (UDP), RestTimer, MistralAI, Oura, Backup
+├── Shared/       # Theme, Formatters, 1RM-Rechner, wiederverwendbare Komponenten
+└── Features/     # Start, ActiveWorkout, History, Exercises, Cardio, Nutrition, Bodyweight, Wellness, AI, Gyms, Profile
+```
