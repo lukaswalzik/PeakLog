@@ -163,6 +163,25 @@ struct WorkoutRecapSheetView: View {
                 recapMetricTile(value: "\(Formatters.weight(recap.totalVolumeKg)) kg", label: "Volumen", icon: "scalemass.fill")
             }
 
+            if let avgHR = recap.avgHeartRate {
+                HStack(spacing: 12) {
+                    Label("Ø \(avgHR) bpm", systemImage: "heart.fill")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    if let maxHR = recap.maxHeartRate {
+                        Text("· Max \(maxHR) bpm")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.88))
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
             if !recap.prDescriptions.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("\(recap.prDescriptions.count) neue Bestleistung(en)!", systemImage: "trophy.fill")

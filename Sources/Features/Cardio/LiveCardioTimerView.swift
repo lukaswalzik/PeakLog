@@ -4,6 +4,7 @@ import UIKit
 struct LiveCardioTimerView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
 
     let onFinish: (CardioSession) -> Void
 
@@ -15,7 +16,15 @@ struct LiveCardioTimerView: View {
     @State private var zoneSeconds: [HeartRateZone: Int] = [
         .z1: 0, .z2: 0, .z3: 0, .z4: 0, .z5: 0
     ]
+    @State private var hrSampleCount: Int = 0
+    @State private var hrBpmSum: Int = 0
+    @State private var hrMaxBpm: Int? = nil
     @State private var ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var avgRecordedHeartRate: Int? {
+        guard hrSampleCount > 0 else { return nil }
+        return Int((Double(hrBpmSum) / Double(hrSampleCount)).rounded())
+    }
 
     private var formattedTotalTime: String {
         let hours = elapsedSeconds / 3600
@@ -48,6 +57,33 @@ struct LiveCardioTimerView: View {
                             .font(.system(size: 52, weight: .bold, design: .rounded))
                             .monospacedDigit()
 
+                        if let bpm = heartRateReceiver.currentBPM {
+                            HStack(spacing: 8) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "heart.fill")
+                                        .font(.subheadline)
+                                    Text("\(bpm) bpm")
+                                        .font(.headline)
+                                        .fontWeight(.bold)
+                                        .monospacedDigit()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.red.opacity(0.15))
+                                .foregroundColor(.red)
+                                .clipShape(Capsule())
+
+                                if let avg = avgRecordedHeartRate, let maxHR = hrMaxBpm {
+                                    Text("Ø \(avg) · Max \(maxHR)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .monospacedDigit()
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
+
                         HStack(spacing: 6) {
                             Circle()
                                 .fill(currentZone.color)
@@ -67,11 +103,14 @@ struct LiveCardioTimerView: View {
 
                     // Zone selector buttons
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Aktuelle HF-Zone antippen")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
+                        HStack {
+                            Text(heartRateReceiver.hasLiveSignal ? "HF-Zone (automatisch via Live-Puls)" : "Aktuelle HF-Zone antippen")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 4)
 
                         ForEach(HeartRateZone.allCases) { zone in
                             let secs = zoneSeconds[zone] ?? 0
@@ -165,6 +204,13 @@ struct LiveCardioTimerView: View {
                 elapsedSeconds += 1
                 zoneSeconds[currentZone, default: 0] += 1
             }
+            .onReceive(heartRateReceiver.sampleSubject) { reading in
+                guard isRunning else { return }
+                hrSampleCount += 1
+                hrBpmSum += reading.bpm
+                hrMaxBpm = hrMaxBpm.map { max($0, reading.bpm) } ?? reading.bpm
+                currentZone = HeartRateZone.clampedZone(for: reading.bpm, maxHR: cardioStore.maxHeartRate)
+            }
         }
     }
 
@@ -179,6 +225,8 @@ struct LiveCardioTimerView: View {
             activityType: activityType,
             startedAt: startedAt,
             durationSeconds: max(60, elapsedSeconds),
+            avgHeartRate: avgRecordedHeartRate,
+            maxHeartRate: hrMaxBpm,
             zone1Seconds: zoneSeconds[.z1] ?? 0,
             zone2Seconds: zoneSeconds[.z2] ?? 0,
             zone3Seconds: zoneSeconds[.z3] ?? 0,

@@ -227,6 +227,10 @@ private struct HistoryRowView: View {
                     Label(durationText, systemImage: "clock")
                     Label("\(Formatters.weight(detail.totalVolumeKg)) kg", systemImage: "scalemass")
                     Label("\(detail.completedSetCount)", systemImage: "checkmark.circle")
+                    if let avgHR = detail.workout.avgHeartRate {
+                        Label("\(avgHR)", systemImage: "heart.fill")
+                            .foregroundColor(.red)
+                    }
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)

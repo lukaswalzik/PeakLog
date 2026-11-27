@@ -5,6 +5,8 @@ struct ActiveWorkoutView: View {
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
     @EnvironmentObject private var restTimerManager: RestTimerManager
     @EnvironmentObject private var gymStore: GymStore
+    @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
 
     @State private var workoutName: String = ""
     @State private var workoutNotes: String = ""
@@ -24,6 +26,14 @@ struct ActiveWorkoutView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             headerCard(detail: detail)
+
+                            if heartRateReceiver.isEnabled || activeWorkoutManager.liveHeartRateStats.sampleCount > 0 {
+                                LiveHeartRateCardView(
+                                    receiver: heartRateReceiver,
+                                    stats: activeWorkoutManager.liveHeartRateStats,
+                                    maxHeartRate: cardioStore.maxHeartRate
+                                )
+                            }
 
                             if detail.exercises.isEmpty {
                                 VStack(spacing: 10) {
@@ -139,13 +149,31 @@ struct ActiveWorkoutView: View {
                 ToolbarItem(placement: .principal) {
                     if let startedAt = activeWorkoutManager.activeWorkout?.workout.startedAt {
                         TimelineView(.periodic(from: .now, by: 1.0)) { context in
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 8, height: 8)
-                                Text(Formatters.elapsedDuration(from: startedAt, to: context.date))
-                                    .font(.headline)
-                                    .monospacedDigit()
+                            HStack(spacing: 8) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 8, height: 8)
+                                    Text(Formatters.elapsedDuration(from: startedAt, to: context.date))
+                                        .font(.headline)
+                                        .monospacedDigit()
+                                }
+
+                                if let bpm = heartRateReceiver.currentBPM {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "heart.fill")
+                                            .font(.caption2)
+                                        Text("\(bpm)")
+                                            .font(.caption)
+                                            .fontWeight(.bold)
+                                            .monospacedDigit()
+                                    }
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(Color.red.opacity(0.15))
+                                    .foregroundColor(.red)
+                                    .clipShape(Capsule())
+                                }
                             }
                         }
                     }
@@ -578,5 +606,8 @@ struct ActiveWorkoutView_Previews: PreviewProvider {
             .environmentObject(ActiveWorkoutManager(database: db))
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(RestTimerManager())
+            .environmentObject(GymStore(database: db))
+            .environmentObject(CardioStore(database: db))
+            .environmentObject(HeartRateReceiver(autoStart: false))
     }
 }

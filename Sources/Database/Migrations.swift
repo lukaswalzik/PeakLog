@@ -347,6 +347,27 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v12_workout_heart_rate") { db in
+            try db.alter(table: "workouts") { t in
+                t.add(column: "avgHeartRate", .integer)
+                t.add(column: "maxHeartRate", .integer)
+                t.add(column: "minHeartRate", .integer)
+            }
+
+            try db.create(table: "workout_heart_rate_samples") { t in
+                t.column("id", .text).primaryKey()
+                t.column("workoutId", .text).notNull().references("workouts", onDelete: .cascade)
+                t.column("recordedAt", .datetime).notNull()
+                t.column("bpm", .integer).notNull()
+            }
+
+            try db.create(
+                index: "idx_workout_hr_samples_workoutId",
+                on: "workout_heart_rate_samples",
+                columns: ["workoutId", "recordedAt"]
+            )
+        }
+
         return migrator
     }
 }

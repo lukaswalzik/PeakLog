@@ -1,22 +1,99 @@
+import Charts
 import SwiftUI
 
 struct WorkoutDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var historyStore: HistoryStore
+    @EnvironmentObject private var cardioStore: CardioStore
 
     let detail: WorkoutDetail
 
     @State private var isShowingDeleteAlert: Bool = false
+    @State private var heartRateSamples: [WorkoutHeartRateSample] = []
+
+    private struct HRChartPoint: Identifiable {
+        let id: Int
+        let timestamp: Date
+        let bpm: Int
+    }
 
     private var durationText: String {
         let end = detail.workout.finishedAt ?? detail.workout.startedAt
         return Formatters.elapsedDuration(from: detail.workout.startedAt, to: end)
     }
 
+    private var resolvedAvgHR: Int? {
+        if let avg = detail.workout.avgHeartRate { return avg }
+        guard !heartRateSamples.isEmpty else { return nil }
+        let sum = heartRateSamples.reduce(0) { $0 + $1.bpm }
+        return Int((Double(sum) / Double(heartRateSamples.count)).rounded())
+    }
+
+    private var resolvedMaxHR: Int? {
+        detail.workout.maxHeartRate ?? heartRateSamples.map { $0.bpm }.max()
+    }
+
+    private var resolvedMinHR: Int? {
+        detail.workout.minHeartRate ?? heartRateSamples.map { $0.bpm }.min()
+    }
+
+    private var hasHeartRateData: Bool {
+        resolvedAvgHR != nil || !heartRateSamples.isEmpty
+    }
+
+    private var chartPoints: [HRChartPoint] {
+        guard !heartRateSamples.isEmpty else { return [] }
+        let maxPoints = 180
+        if heartRateSamples.count <= maxPoints {
+            return heartRateSamples.enumerated().map { idx, sample in
+                HRChartPoint(id: idx, timestamp: sample.recordedAt, bpm: sample.bpm)
+            }
+        }
+        let bucketSize = Double(heartRateSamples.count) / Double(maxPoints)
+        var points: [HRChartPoint] = []
+        points.reserveCapacity(maxPoints)
+        for i in 0..<maxPoints {
+            let start = Int(Double(i) * bucketSize)
+            let end = min(heartRateSamples.count, Int(Double(i + 1) * bucketSize))
+            guard start < end else { continue }
+            let slice = heartRateSamples[start..<end]
+            let avgBpm = Int((Double(slice.reduce(0) { $0 + $1.bpm }) / Double(slice.count)).rounded())
+            let midTimestamp = slice[start + slice.count / 2].recordedAt
+            points.append(HRChartPoint(id: i, timestamp: midTimestamp, bpm: avgBpm))
+        }
+        return points
+    }
+
+    private var chartYDomain: ClosedRange<Int> {
+        let minVal = resolvedMinHR ?? 60
+        let maxVal = resolvedMaxHR ?? 160
+        let lower = max(30, minVal - 10)
+        let upper = min(240, max(lower + 20, maxVal + 10))
+        return lower...upper
+    }
+
+    private var zoneCounts: [(zone: HeartRateZone, count: Int)] {
+        guard !heartRateSamples.isEmpty else { return [] }
+        var counts: [HeartRateZone: Int] = [:]
+        for sample in heartRateSamples {
+            if let zone = HeartRateZone.zone(for: sample.bpm, maxHR: cardioStore.maxHeartRate) {
+                counts[zone, default: 0] += 1
+            }
+        }
+        return HeartRateZone.allCases.compactMap { zone in
+            guard let count = counts[zone], count > 0 else { return nil }
+            return (zone, count)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 summaryCard
+
+                if hasHeartRateData {
+                    heartRateCard
+                }
 
                 if detail.exercises.isEmpty {
                     EmptyStateView(
@@ -45,6 +122,9 @@ struct WorkoutDetailView: View {
                 }
                 .accessibilityLabel("Workout löschen")
             }
+        }
+        .onAppear {
+            heartRateSamples = historyStore.fetchHeartRateSamples(forWorkoutId: detail.id)
         }
         .alert("Workout löschen?", isPresented: $isShowingDeleteAlert) {
             Button("Löschen", role: .destructive) {
@@ -87,6 +167,109 @@ struct WorkoutDetailView: View {
                 Text(notes)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var heartRateCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Herzfrequenz", systemImage: "heart.fill")
+                    .font(.headline)
+                    .foregroundColor(.red)
+                Spacer()
+                if !heartRateSamples.isEmpty {
+                    Text("\(heartRateSamples.count) Messpunkte")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack(spacing: 10) {
+                MetricTile(title: "Ø Puls", value: resolvedAvgHR.map { "\($0) bpm" } ?? "–")
+                MetricTile(title: "Max. Puls", value: resolvedMaxHR.map { "\($0) bpm" } ?? "–")
+                MetricTile(title: "Min. Puls", value: resolvedMinHR.map { "\($0) bpm" } ?? "–")
+            }
+
+            if chartPoints.count >= 2 {
+                Chart {
+                    ForEach(chartPoints) { point in
+                        AreaMark(
+                            x: .value("Zeit", point.timestamp),
+                            yStart: .value("Min", chartYDomain.lowerBound),
+                            yEnd: .value("BPM", point.bpm)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.red.opacity(0.28), Color.red.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        LineMark(
+                            x: .value("Zeit", point.timestamp),
+                            y: .value("BPM", point.bpm)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .foregroundStyle(Color.red)
+                    }
+
+                    if let avg = resolvedAvgHR {
+                        RuleMark(y: .value("Durchschnitt", avg))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                            .foregroundStyle(Color.secondary.opacity(0.6))
+                    }
+                }
+                .chartYScale(domain: chartYDomain)
+                .chartYAxis {
+                    AxisMarks(position: .leading)
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                        AxisValueLabel(format: .dateTime.hour().minute())
+                    }
+                }
+                .frame(height: 165)
+            }
+
+            let zones = zoneCounts
+            let totalZoned = zones.reduce(0) { $0 + $1.count }
+            if totalZoned > 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    GeometryReader { geo in
+                        HStack(spacing: 2) {
+                            ForEach(zones, id: \.zone.id) { item in
+                                let fraction = CGFloat(item.count) / CGFloat(totalZoned)
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(item.zone.color)
+                                    .frame(width: max(4, geo.size.width * fraction - 2))
+                            }
+                        }
+                    }
+                    .frame(height: 8)
+
+                    HStack(spacing: 10) {
+                        ForEach(zones, id: \.zone.id) { item in
+                            let pct = Int((Double(item.count) / Double(totalZoned) * 100.0).rounded())
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(item.zone.color)
+                                    .frame(width: 6, height: 6)
+                                Text("\(item.zone.shortName) \(pct)%")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
+                }
             }
         }
         .padding(14)

@@ -625,9 +625,17 @@ final class MistralAIService: ObservableObject {
         3. Ein konkreter Tipp für Regeneration / nächstes Training (Protein/Schlaf/Progression).
         """
 
+        let hrLine: String
+        if let avgHR = recap.avgHeartRate {
+            let maxPart = recap.maxHeartRate.map { " | Max-Puls: \($0) bpm" } ?? ""
+            hrLine = "\nHerzfrequenz: Ø \(avgHR) bpm\(maxPart)"
+        } else {
+            hrLine = ""
+        }
+
         let userText = """
         Gerade abgeschlossenes Workout: \(recap.workoutName)
-        Dauer: \(mins) Min. | Übungen: \(recap.exerciseCount) | Abgehakte Sätze: \(recap.completedSets) | Gesamtvolumen: \(Formatters.weight(recap.totalVolumeKg)) kg
+        Dauer: \(mins) Min. | Übungen: \(recap.exerciseCount) | Abgehakte Sätze: \(recap.completedSets) | Gesamtvolumen: \(Formatters.weight(recap.totalVolumeKg)) kg\(hrLine)
         Neue Bestleistungen: \(prs)
         """
 

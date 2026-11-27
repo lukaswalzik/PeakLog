@@ -11,6 +11,7 @@ struct RootTabView: View {
 
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
     @EnvironmentObject private var restTimerManager: RestTimerManager
+    @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
     @State private var selectedTab: Tab = .start
 
     var body: some View {
@@ -55,7 +56,8 @@ struct RootTabView: View {
             if let detail = activeWorkoutManager.activeWorkout, !activeWorkoutManager.isPresentingSheet {
                 ActiveWorkoutBanner(
                     detail: detail,
-                    restTimerManager: restTimerManager
+                    restTimerManager: restTimerManager,
+                    heartRateReceiver: heartRateReceiver
                 ) {
                     activeWorkoutManager.isPresentingSheet = true
                 }
@@ -81,6 +83,7 @@ struct RootTabView: View {
 private struct ActiveWorkoutBanner: View {
     let detail: WorkoutDetail
     @ObservedObject var restTimerManager: RestTimerManager
+    @ObservedObject var heartRateReceiver: HeartRateReceiver
     let onTap: () -> Void
 
     private var formattedRest: String {
@@ -112,6 +115,22 @@ private struct ActiveWorkoutBanner: View {
                 }
 
                 Spacer()
+
+                if let bpm = heartRateReceiver.currentBPM {
+                    HStack(spacing: 3) {
+                        Image(systemName: "heart.fill")
+                            .font(.caption2)
+                        Text("\(bpm)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.red.opacity(0.15))
+                    .foregroundColor(.red)
+                    .clipShape(Capsule())
+                }
 
                 if restTimerManager.isRunning {
                     HStack(spacing: 4) {
@@ -157,5 +176,7 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(CardioStore(database: db))
             .environmentObject(GymStore(database: db))
             .environmentObject(NutritionStore(database: db))
+            .environmentObject(WellnessStore(database: db))
+            .environmentObject(HeartRateReceiver(autoStart: false))
     }
 }

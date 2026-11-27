@@ -110,6 +110,21 @@ enum HeartRateZone: Int, CaseIterable, Identifiable, Hashable {
         let upper = Int(round(Double(maxHR) * percentBounds.1))
         return "\(lower)–\(upper) bpm"
     }
+
+    static func zone(for bpm: Int, maxHR: Int) -> HeartRateZone? {
+        let safeMax = max(120, maxHR)
+        let ratio = Double(bpm) / Double(safeMax)
+        if ratio < 0.50 { return nil }
+        if ratio < 0.60 { return .z1 }
+        if ratio < 0.70 { return .z2 }
+        if ratio < 0.80 { return .z3 }
+        if ratio < 0.90 { return .z4 }
+        return .z5
+    }
+
+    static func clampedZone(for bpm: Int, maxHR: Int) -> HeartRateZone {
+        zone(for: bpm, maxHR: maxHR) ?? .z1
+    }
 }
 
 struct CardioSession: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {

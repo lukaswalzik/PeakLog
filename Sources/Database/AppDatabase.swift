@@ -679,7 +679,11 @@ extension AppDatabase {
         }
     }
 
-    func finishWorkout(id: String, updateRoutine: Bool = false) throws {
+    func finishWorkout(
+        id: String,
+        updateRoutine: Bool = false,
+        pendingHeartRateSamples: [WorkoutHeartRateSample] = []
+    ) throws {
         try dbWriter.write { db in
             // Remove uncompleted sets so history & stats only contain completed work
             try db.execute(
@@ -755,10 +759,67 @@ extension AppDatabase {
                 )
             }
 
+            for sample in pendingHeartRateSamples where sample.workoutId == id {
+                try sample.insert(db, onConflict: .ignore)
+            }
+
+            var avgHR: Int? = nil
+            var maxHR: Int? = nil
+            var minHR: Int? = nil
+            if let hrRow = try Row.fetchOne(
+                db,
+                sql: """
+                    SELECT COUNT(*) AS cnt,
+                           AVG(bpm) AS avgBpm,
+                           MAX(bpm) AS maxBpm,
+                           MIN(bpm) AS minBpm
+                    FROM workout_heart_rate_samples
+                    WHERE workoutId = ?
+                    """,
+                arguments: [id]
+            ) {
+                let cnt: Int = (hrRow["cnt"] as Int?) ?? 0
+                if cnt > 0 {
+                    let avgDouble: Double? = hrRow["avgBpm"]
+                    avgHR = avgDouble.map { Int($0.rounded()) }
+                    maxHR = hrRow["maxBpm"]
+                    minHR = hrRow["minBpm"]
+                }
+            }
+
             try db.execute(
-                sql: "UPDATE workouts SET finishedAt = ? WHERE id = ?",
-                arguments: [Date(), id]
+                sql: """
+                    UPDATE workouts
+                    SET finishedAt = ?,
+                        avgHeartRate = ?,
+                        maxHeartRate = ?,
+                        minHeartRate = ?
+                    WHERE id = ?
+                    """,
+                arguments: [Date(), avgHR, maxHR, minHR, id]
             )
+        }
+    }
+
+    func insertHeartRateSamples(_ samples: [WorkoutHeartRateSample]) throws {
+        guard !samples.isEmpty else { return }
+        try dbWriter.write { db in
+            for sample in samples {
+                try sample.insert(db, onConflict: .ignore)
+            }
+        }
+    }
+
+    static func fetchHeartRateSamples(forWorkoutId workoutId: String, in db: Database) throws -> [WorkoutHeartRateSample] {
+        try WorkoutHeartRateSample
+            .filter(WorkoutHeartRateSample.Columns.workoutId == workoutId)
+            .order(WorkoutHeartRateSample.Columns.recordedAt.asc)
+            .fetchAll(db)
+    }
+
+    func fetchHeartRateSamples(forWorkoutId workoutId: String) throws -> [WorkoutHeartRateSample] {
+        try dbWriter.read { db in
+            try Self.fetchHeartRateSamples(forWorkoutId: workoutId, in: db)
         }
     }
 
@@ -979,7 +1040,7 @@ extension AppDatabase {
     func exportBackupPayload() throws -> BackupPayload {
         try dbWriter.read { db in
             BackupPayload(
-                schemaVersion: 9,
+                schemaVersion: 10,
                 exportedAt: Date(),
                 exercises: try Exercise.fetchAll(db),
                 routines: try Routine.fetchAll(db),
@@ -1002,7 +1063,8 @@ extension AppDatabase {
                 readinessLogs: try ReadinessLog.fetchAll(db),
                 exerciseGymNotes: try ExerciseGymNote.fetchAll(db),
                 dayTemplates: try DayTemplate.fetchAll(db),
-                dayTemplateItems: try DayTemplateItem.fetchAll(db)
+                dayTemplateItems: try DayTemplateItem.fetchAll(db),
+                workoutHeartRateSamples: try WorkoutHeartRateSample.fetchAll(db)
             )
         }
     }
@@ -1025,6 +1087,7 @@ extension AppDatabase {
             try CardioSession.deleteAll(db)
             try BodyweightPhoto.deleteAll(db)
             try BodyweightEntry.deleteAll(db)
+            try WorkoutHeartRateSample.deleteAll(db)
             try WorkoutSet.deleteAll(db)
             try WorkoutExercise.deleteAll(db)
             try Workout.deleteAll(db)
@@ -1041,6 +1104,7 @@ extension AppDatabase {
             for item in payload.workouts { try item.insert(db) }
             for item in payload.workoutExercises { try item.insert(db) }
             for item in payload.workoutSets { try item.insert(db) }
+            for item in payload.workoutHeartRateSamples ?? [] { try item.insert(db) }
             for item in payload.bodyweightEntries ?? [] { try item.insert(db) }
             for item in payload.bodyweightPhotos ?? [] { try item.insert(db) }
             for item in payload.cardioSessions ?? [] { try item.insert(db) }

@@ -38,6 +38,13 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
     var startedAt: Date
     var finishedAt: Date?
     var notes: String?
+    var avgHeartRate: Int?
+    var maxHeartRate: Int?
+    var minHeartRate: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, routineId, gymId, name, startedAt, finishedAt, notes, avgHeartRate, maxHeartRate, minHeartRate
+    }
 
     enum Columns {
         static let id = Column(CodingKeys.id)
@@ -47,6 +54,9 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
         static let startedAt = Column(CodingKeys.startedAt)
         static let finishedAt = Column(CodingKeys.finishedAt)
         static let notes = Column(CodingKeys.notes)
+        static let avgHeartRate = Column(CodingKeys.avgHeartRate)
+        static let maxHeartRate = Column(CodingKeys.maxHeartRate)
+        static let minHeartRate = Column(CodingKeys.minHeartRate)
     }
 
     init(
@@ -56,7 +66,10 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
         name: String,
         startedAt: Date = Date(),
         finishedAt: Date? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        avgHeartRate: Int? = nil,
+        maxHeartRate: Int? = nil,
+        minHeartRate: Int? = nil
     ) {
         self.id = id
         self.routineId = routineId
@@ -65,6 +78,23 @@ struct Workout: Identifiable, Equatable, Hashable, Codable, FetchableRecord, Per
         self.startedAt = startedAt
         self.finishedAt = finishedAt
         self.notes = notes
+        self.avgHeartRate = avgHeartRate
+        self.maxHeartRate = maxHeartRate
+        self.minHeartRate = minHeartRate
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        routineId = try c.decodeIfPresent(String.self, forKey: .routineId)
+        gymId = try c.decodeIfPresent(String.self, forKey: .gymId)
+        name = try c.decode(String.self, forKey: .name)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        avgHeartRate = try c.decodeIfPresent(Int.self, forKey: .avgHeartRate)
+        maxHeartRate = try c.decodeIfPresent(Int.self, forKey: .maxHeartRate)
+        minHeartRate = try c.decodeIfPresent(Int.self, forKey: .minHeartRate)
     }
 }
 
@@ -285,6 +315,74 @@ struct WorkoutDetail: Identifiable, Equatable, Hashable {
     }
 }
 
+struct WorkoutHeartRateSample: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "workout_heart_rate_samples"
+
+    var id: String
+    var workoutId: String
+    var recordedAt: Date
+    var bpm: Int
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let workoutId = Column(CodingKeys.workoutId)
+        static let recordedAt = Column(CodingKeys.recordedAt)
+        static let bpm = Column(CodingKeys.bpm)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        workoutId: String,
+        recordedAt: Date = Date(),
+        bpm: Int
+    ) {
+        self.id = id
+        self.workoutId = workoutId
+        self.recordedAt = recordedAt
+        self.bpm = bpm
+    }
+}
+
+struct WorkoutHeartRateStats: Equatable {
+    var sampleCount: Int = 0
+    var bpmSum: Int = 0
+    var minBPM: Int? = nil
+    var maxBPM: Int? = nil
+    var recentSamples: [WorkoutHeartRateSample] = []
+
+    var avgBPM: Int? {
+        guard sampleCount > 0 else { return nil }
+        return Int((Double(bpmSum) / Double(sampleCount)).rounded())
+    }
+
+    mutating func record(_ sample: WorkoutHeartRateSample, maxRecent: Int = 120) {
+        sampleCount += 1
+        bpmSum += sample.bpm
+        minBPM = minBPM.map { min($0, sample.bpm) } ?? sample.bpm
+        maxBPM = maxBPM.map { max($0, sample.bpm) } ?? sample.bpm
+        recentSamples.append(sample)
+        if recentSamples.count > maxRecent {
+            recentSamples.removeFirst(recentSamples.count - maxRecent)
+        }
+    }
+
+    static func from(samples: [WorkoutHeartRateSample], maxRecent: Int = 120) -> WorkoutHeartRateStats {
+        var stats = WorkoutHeartRateStats()
+        for sample in samples {
+            stats.sampleCount += 1
+            stats.bpmSum += sample.bpm
+            stats.minBPM = stats.minBPM.map { min($0, sample.bpm) } ?? sample.bpm
+            stats.maxBPM = stats.maxBPM.map { max($0, sample.bpm) } ?? sample.bpm
+        }
+        if samples.count > maxRecent {
+            stats.recentSamples = Array(samples.suffix(maxRecent))
+        } else {
+            stats.recentSamples = samples
+        }
+        return stats
+    }
+}
+
 struct CompletedWorkoutRecap: Identifiable, Equatable {
     let id: String
     let workoutName: String
@@ -295,4 +393,7 @@ struct CompletedWorkoutRecap: Identifiable, Equatable {
     let completedSets: Int
     let totalVolumeKg: Double
     let prDescriptions: [String]
+    var avgHeartRate: Int? = nil
+    var maxHeartRate: Int? = nil
+    var minHeartRate: Int? = nil
 }

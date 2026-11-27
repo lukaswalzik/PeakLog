@@ -13,14 +13,17 @@ struct StrongTrackerApp: App {
     @StateObject private var gymStore: GymStore
     @StateObject private var nutritionStore: NutritionStore
     @StateObject private var wellnessStore: WellnessStore
+    @StateObject private var heartRateReceiver: HeartRateReceiver
 
     init() {
         let db = AppDatabase.shared
         let timerManager = RestTimerManager()
+        let hrReceiver = HeartRateReceiver()
         let workoutManager = ActiveWorkoutManager(database: db)
         workoutManager.onSetCompleted = { restSeconds in
             timerManager.startIfAutoEnabled(seconds: restSeconds)
         }
+        workoutManager.bindHeartRateReceiver(hrReceiver)
 
         _exerciseStore = StateObject(wrappedValue: ExerciseStore(database: db))
         _routineStore = StateObject(wrappedValue: RoutineStore(database: db))
@@ -32,6 +35,7 @@ struct StrongTrackerApp: App {
         _gymStore = StateObject(wrappedValue: GymStore(database: db))
         _nutritionStore = StateObject(wrappedValue: NutritionStore(database: db))
         _wellnessStore = StateObject(wrappedValue: WellnessStore(database: db))
+        _heartRateReceiver = StateObject(wrappedValue: hrReceiver)
 
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
@@ -52,6 +56,7 @@ struct StrongTrackerApp: App {
                 .environmentObject(gymStore)
                 .environmentObject(nutritionStore)
                 .environmentObject(wellnessStore)
+                .environmentObject(heartRateReceiver)
         }
     }
 }

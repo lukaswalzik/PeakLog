@@ -1,8 +1,11 @@
+import Combine
 import Foundation
 import GRDB
+import UIKit
 
 final class ActiveWorkoutManager: ObservableObject {
     @Published private(set) var activeWorkout: WorkoutDetail?
+    @Published private(set) var liveHeartRateStats: WorkoutHeartRateStats = WorkoutHeartRateStats()
     @Published var isPresentingSheet: Bool = false
     @Published var lastCompletedRecap: CompletedWorkoutRecap? = nil
     @Published var errorMessage: String?
@@ -12,14 +15,40 @@ final class ActiveWorkoutManager: ObservableObject {
 
     private let database: AppDatabase
     private var cancellable: AnyDatabaseCancellable?
+    private var hrCancellable: AnyCancellable?
+    private var backgroundObserver: NSObjectProtocol?
+    private var trackingWorkoutId: String? = nil
+    private var pendingHeartRateSamples: [WorkoutHeartRateSample] = []
+    private var lastHeartRateFlushAt: Date = .distantPast
 
     init(database: AppDatabase) {
         self.database = database
         startObservation()
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.flushPendingHeartRateSamples()
+        }
+    }
+
+    deinit {
+        if let observer = backgroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     var hasActiveWorkout: Bool {
         activeWorkout != nil
+    }
+
+    func bindHeartRateReceiver(_ receiver: HeartRateReceiver) {
+        hrCancellable = receiver.sampleSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] reading in
+                self?.recordLiveHeartRate(reading)
+            }
     }
 
     private func startObservation() {
@@ -34,12 +63,68 @@ final class ActiveWorkoutManager: ObservableObject {
                 self?.errorMessage = "Aktives Workout konnte nicht geladen werden: \(error.localizedDescription)"
             },
             onChange: { [weak self] workoutDetail in
-                self?.activeWorkout = workoutDetail
+                guard let self = self else { return }
+                self.activeWorkout = workoutDetail
+                self.syncHeartRateTracking(for: workoutDetail?.workout.id)
                 if workoutDetail == nil {
-                    self?.isPresentingSheet = false
+                    self.isPresentingSheet = false
                 }
             }
         )
+    }
+
+    private func syncHeartRateTracking(for workoutId: String?) {
+        guard workoutId != trackingWorkoutId else { return }
+        if trackingWorkoutId != nil {
+            flushPendingHeartRateSamples()
+        }
+        pendingHeartRateSamples.removeAll()
+        trackingWorkoutId = workoutId
+        lastHeartRateFlushAt = .distantPast
+
+        guard let workoutId = workoutId else {
+            liveHeartRateStats = WorkoutHeartRateStats()
+            return
+        }
+
+        do {
+            let existing = try database.fetchHeartRateSamples(forWorkoutId: workoutId)
+            liveHeartRateStats = WorkoutHeartRateStats.from(samples: existing)
+        } catch {
+            liveHeartRateStats = WorkoutHeartRateStats()
+        }
+    }
+
+    private func recordLiveHeartRate(_ reading: HeartRateReading) {
+        guard let workoutId = activeWorkout?.workout.id else { return }
+        if trackingWorkoutId != workoutId {
+            syncHeartRateTracking(for: workoutId)
+        }
+
+        let sample = WorkoutHeartRateSample(
+            workoutId: workoutId,
+            recordedAt: reading.recordedAt,
+            bpm: reading.bpm
+        )
+        liveHeartRateStats.record(sample)
+        pendingHeartRateSamples.append(sample)
+
+        if pendingHeartRateSamples.count >= 10
+            || reading.recordedAt.timeIntervalSince(lastHeartRateFlushAt) >= 10.0 {
+            flushPendingHeartRateSamples()
+        }
+    }
+
+    private func flushPendingHeartRateSamples() {
+        guard !pendingHeartRateSamples.isEmpty else { return }
+        let batch = pendingHeartRateSamples
+        pendingHeartRateSamples.removeAll(keepingCapacity: true)
+        lastHeartRateFlushAt = Date()
+        do {
+            try database.insertHeartRateSamples(batch)
+        } catch {
+            pendingHeartRateSamples.insert(contentsOf: batch, at: 0)
+        }
     }
 
     func startEmptyWorkout(gymId: String? = nil) {
@@ -267,11 +352,22 @@ final class ActiveWorkoutManager: ObservableObject {
             exerciseCount: detail.exercises.count,
             completedSets: detail.completedSetCount,
             totalVolumeKg: detail.totalVolumeKg,
-            prDescriptions: prDescriptions
+            prDescriptions: prDescriptions,
+            avgHeartRate: liveHeartRateStats.avgBPM,
+            maxHeartRate: liveHeartRateStats.maxBPM,
+            minHeartRate: liveHeartRateStats.minBPM
         )
 
+        let pendingSamples = pendingHeartRateSamples
         do {
-            try database.finishWorkout(id: workoutId, updateRoutine: updateRoutine)
+            try database.finishWorkout(
+                id: workoutId,
+                updateRoutine: updateRoutine,
+                pendingHeartRateSamples: pendingSamples
+            )
+            pendingHeartRateSamples.removeAll()
+            liveHeartRateStats = WorkoutHeartRateStats()
+            trackingWorkoutId = nil
             isPresentingSheet = false
             if recap.completedSets > 0 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
@@ -286,6 +382,9 @@ final class ActiveWorkoutManager: ObservableObject {
     func discardWorkout() {
         guard let workoutId = activeWorkout?.workout.id else { return }
         do {
+            pendingHeartRateSamples.removeAll()
+            liveHeartRateStats = WorkoutHeartRateStats()
+            trackingWorkoutId = nil
             try database.discardWorkout(id: workoutId)
             isPresentingSheet = false
         } catch {

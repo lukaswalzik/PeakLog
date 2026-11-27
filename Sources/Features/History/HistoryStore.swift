@@ -57,6 +57,15 @@ final class HistoryStore: ObservableObject {
         }
     }
 
+    func fetchHeartRateSamples(forWorkoutId workoutId: String) -> [WorkoutHeartRateSample] {
+        do {
+            return try database.fetchHeartRateSamples(forWorkoutId: workoutId)
+        } catch {
+            errorMessage = "Herzfrequenz-Daten konnten nicht geladen werden: \(error.localizedDescription)"
+            return []
+        }
+    }
+
     func deleteWorkout(id: String) {
         do {
             try database.deleteWorkout(id: id)

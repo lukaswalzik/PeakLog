@@ -9,6 +9,7 @@ struct ProfileBackupView: View {
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var gymStore: GymStore
     @EnvironmentObject private var wellnessStore: WellnessStore
+    @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
     @State private var exportIncludesPhotos: Bool = false
@@ -180,6 +181,43 @@ struct ProfileBackupView: View {
                                         .foregroundColor(.green)
                                 } else {
                                     Text("OAuth2 Sync für Readiness, Schlaf, HRV & Workouts")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
+                        HeartRateReceiverSettingsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(.red)
+                                .frame(width: 40, height: 40)
+                                .background(Color.red.opacity(0.14))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Live-Herzfrequenz (UDP)")
+                                    .font(.headline)
+                                if let bpm = heartRateReceiver.currentBPM {
+                                    Text("Live · \(bpm) bpm (\(heartRateReceiver.endpointDisplay))")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                } else if let err = heartRateReceiver.lastError {
+                                    Text(err)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .lineLimit(1)
+                                } else if heartRateReceiver.isEnabled && heartRateReceiver.isListening {
+                                    Text("Aktiv · wartet auf airpods-hf-bridge (:\(heartRateReceiver.port))")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Deaktiviert · \(heartRateReceiver.endpointDisplay)")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -618,5 +656,8 @@ struct ProfileBackupView_Previews: PreviewProvider {
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(BodyweightStore(database: db))
             .environmentObject(CardioStore(database: db))
+            .environmentObject(GymStore(database: db))
+            .environmentObject(WellnessStore(database: db))
+            .environmentObject(HeartRateReceiver(autoStart: false))
     }
 }
