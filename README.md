@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/screenshots/banner.jpg" alt="StrongTracker Banner" width="100%" />
+  <img src="docs/screenshots/banner.jpg" alt="PeakLog Banner" width="100%" />
 </p>
 
-<h1 align="center">StrongTracker</h1>
+<h1 align="center">PeakLog</h1>
 
 <p align="center">
   <strong>Native iOS Fitness-, Ernährungs-, Wellness- & Live-Herzfrequenz-App</strong><br/>
-  100 % lokal (SQLite/GRDB) · Kein Abo · Keine Cloud-Pflicht · Gebaut für iOS 16.5+ & TrollStore
+  100 % lokal (SQLite/GRDB) · Dynamic Island · Apple Health · Kein Abo · Keine Cloud-Pflicht · iOS 16.5+ & TrollStore
 </p>
 
 <p align="center">
@@ -14,8 +14,8 @@
   <img src="https://img.shields.io/badge/Swift-5%20%7C%20SwiftUI-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 5 SwiftUI" />
   <img src="https://img.shields.io/badge/Database-GRDB%20%2F%20SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite GRDB" />
   <img src="https://img.shields.io/badge/Distribution-TrollStore%20IPA-5856D6?style=for-the-badge" alt="TrollStore IPA" />
-  <a href="https://github.com/Peterpimmle/strong-tracker/actions/workflows/build-ipa.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Peterpimmle/strong-tracker/build-ipa.yml?branch=main&style=for-the-badge&label=IPA%20Build" alt="IPA Build Status" />
+  <a href="https://github.com/lukaswalzik/strong-tracker/actions/workflows/build-ipa.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/lukaswalzik/strong-tracker/build-ipa.yml?branch=main&style=for-the-badge&label=IPA%20Build" alt="IPA Build Status" />
   </a>
 </p>
 
@@ -27,7 +27,7 @@
   <tr>
     <td align="center" width="33%">
       <img src="docs/screenshots/active-workout.jpg" alt="Aktives Workout mit Live-Herzfrequenz" width="260" /><br/>
-      <sub><b>Aktives Training & Live-Puls</b><br/>Live-UDP-HF, Sparkline, Progression, RIR, PR-Badges & Pausentimer</sub>
+      <sub><b>Aktives Training & Live-Puls</b><br/>Apple Health / UDP-HF, Sparkline, Progression, RIR, PR-Badges & Pausentimer</sub>
     </td>
     <td align="center" width="33%">
       <img src="docs/screenshots/nutrition-ai.jpg" alt="Ernährung, Makros & KI-Scanner" width="260" /><br/>
@@ -44,19 +44,19 @@
 
 ## Funktionsumfang
 
-### Krafttraining & Smart Coaching
+### Krafttraining, Dynamic Island & Smart Coaching
+- **Dynamic Island & Sperrbildschirm Live Activity (`ActivityKit`):** Zeigt Pausentimer-Countdown, Live-Herzfrequenz + Zone, aktuelle Übung und Satz-Fortschritt live in der **Dynamic Island** (iPhone 14 Pro) und auf dem Sperrbildschirm – inkl. 1-Tap-Sprung zurück ins laufende Workout.
 - **Routinen & Vorlagen:** Eigene Trainingspläne erstellen, sortieren, per **Deload-Modus** (−20 % Gewicht, reduziertes Volumen) starten und nach dem Training direkt aktualisieren.
 - **Aktives Workout-Logging:** Vorherige Sätze pro Gym im Blick, Satztypen (`Arbeitssatz`, `Aufwärmsatz`, `Dropset`, `Muskelversagen`), **RIR-Tracking**, **Supersätze**, Aufwärmsatz-Generator und schnelles Ersetzen besetzter Geräte.
 - **Smart Progression & Live-PRs:** Automatische Double-Progression-Empfehlungen, Live-PR-Erkennung (geschätztes 1RM nach Epley), automatischer **Pausentimer** inkl. lokaler Benachrichtigungen und minimierbarem Workout-Banner.
-- **Dynamic Island & Sperrbildschirm Live Activity:** Zeigt Pausentimer-Countdown, Live-Herzfrequenz + Zone, aktuelle Übung und Satz-Fortschritt live in der **Dynamic Island** (iPhone 14 Pro) und auf dem Sperrbildschirm (`ActivityKit`).
 - **Multi-Gym-Support & Übungsbibliothek:** Mehrere Studios/Homegyms verwalten, Gym-spezifische Geräte-/Setup-Notizen speichern, 36 integrierte Übungs-Illustrationen + eigene Übungsfotos.
 - **Workout-Recap-Cards:** Teilbare Abschlusskarten mit Dauer, Volumen, Sätzen, neuen Bestleistungen und Herzfrequenz-Zusammenfassung.
 
 ### Live-Herzfrequenz (Apple Health & UDP) & Cardio
 - **Apple Health (HealthKit):** Live-Herzfrequenz-Streaming in Echtzeit (z. B. von AirPods HF Bridge oder Apple Watch), Tagesübersicht (Schritte, Aktivitätskalorien, Ruhepuls, HRV), 1-Tap-Gewichtsimport sowie automatischer Export abgeschlossener Kraft- & Cardio-Workouts in Apple Health.
-- **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt zusätzlich lokale UDP-Pakete (IPv4/IPv6, UTF-8 ASCII-BPM `30–240`, ca. 1×/Sekunde) ohne Cloud oder Zusatzserver.
-- **Im Kraft-Workout:** Live-Puls in Toolbar, Banner und eigener Live-HF-Karte mit aktueller HF-Zone, Ø-/Max-Puls und Echtzeit-Sparkline; alle Messpunkte werden automatisch gespeichert und im Trainingsverlauf als **Swift-Charts-Kurve** mit HF-Zonen-Verteilung visualisiert.
-- **Cardio & Live-Cardio-Timer:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische Zonen-Erkennung per Live-Puls (Apple Health oder UDP) sowie Speicherung von Ø- und Max-Herzfrequenz.
+- **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt zusätzlich lokale UDP-Pakete (IPv4/IPv6, UTF-8 ASCII-BPM `30–240`, ca. 1×/Sekunde) inkl. integriertem Selbsttest & Roh-Diagnose.
+- **Im Kraft-Workout:** Live-Puls in Toolbar, Banner, Dynamic Island und eigener Live-HF-Karte mit aktueller HF-Zone, Ø-/Max-Puls und Echtzeit-Sparkline; alle Messpunkte werden automatisch gespeichert und im Trainingsverlauf als **Swift-Charts-Kurve** mit HF-Zonen-Verteilung visualisiert.
+- **Cardio & Live-Cardio-Timer:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische **Auto-Zonen-Umschaltung** per Live-Puls sowie Speicherung von Ø- und Max-Herzfrequenz.
 
 ### Ernährung, Wasser & Supplements
 - **Makro- & Mikronährstoffe:** Kalorien, Protein, Kohlenhydrate, Fett sowie Ballaststoffe, Zucker, Salz, Vitamin C, Kalzium und Eisen.
@@ -72,7 +72,7 @@
 ### Wellness, Oura Ring & Fortschritt
 - **Oura Ring (API v2, OAuth2):** Synchronisiert Readiness, Schlaf, HRV, Ruhepuls, Aktivität, Stress, SpO2 und Workouts direkt in die App.
 - **Körperfortschritt:** Körpergewicht mit Vorher/Nachher-Foto-Vergleich, Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.
-- **Motivation & Analyse:** Fortschritts-Dashboard (1RM- & Gewichtstrends), wöchentliche Muskel-Heatmap, Kraftstandards, **StrongTracker Wrapped**, Trainingskalender, Level/XP/Streaks, Meilensteine und lokale Erinnerungen.
+- **Motivation & Analyse:** Fortschritts-Dashboard (1RM- & Gewichtstrends), wöchentliche Muskel-Heatmap, Kraftstandards, **PeakLog Wrapped**, Trainingskalender, Level/XP/Streaks, Meilensteine und lokale Erinnerungen.
 
 ### Datenschutz, Import & Lokales Backup
 - **100 % Local-First:** Alle Daten liegen in einer lokalen SQLite-Datenbank auf dem iPhone; API-Keys und OAuth-Tokens werden lokal gespeichert und nur bei Nutzung direkt an die jeweilige API (Mistral / Oura / Open Food Facts) gesendet.
@@ -81,17 +81,10 @@
 
 ---
 
-## Live-Herzfrequenz per UDP (`airpods-hf-bridge`)
+## Live-Herzfrequenz per Apple Health oder UDP
 
-StrongTracker lauscht standardmäßig (ein-/ausschaltbar unter **Profil → Live-Herzfrequenz (UDP)**) auf lokalem Loopback-UDP:
-
-| Parameter | Wert |
-| --- | --- |
-| **Adresse / Port** | `127.0.0.1:49153` (UDP) |
-| **Payload** | UTF-8 ASCII-Ganzzahl `30`–`240` (z. B. `"74"`, optional mit `\n`) |
-| **Intervall** | ca. 1× / Sekunde (Signal-Timeout nach 6 s ohne Paket) |
-
-Lokaler Schnelltest (z. B. per Shell/Simulator):
+- **Apple Health:** Unter **Profil → Apple Health** verbinden. Neue Herzfrequenz-Werte (z. B. von AirPods HF Bridge oder Apple Watch) erscheinen automatisch im Workout, im Live-Cardio-Timer und in der Dynamic Island.
+- **Lokales UDP (optional):** Lauscht zusätzlich auf `0.0.0.0:49153` & `[::]:49153` (UTF-8 ASCII-BPM `30–240`, z. B. `"74"`, inkl. 1-Tap-Selbsttest unter **Profil → Live-Herzfrequenz (UDP)**).
 
 ```bash
 printf "132" | nc -u -w1 127.0.0.1 49153
@@ -102,18 +95,18 @@ printf "132" | nc -u -w1 127.0.0.1 49153
 ## Installation (TrollStore / Sideloading)
 
 ### Option 1: Vorgefertigte `.ipa` aus GitHub Actions
-1. Öffne den Tab **[Actions](https://github.com/Peterpimmle/strong-tracker/actions/workflows/build-ipa.yml)** und wähle den letzten erfolgreichen Lauf von **Build Unsigned IPA**.
-2. Lade das Artifact **`StrongTracker-ipa`** herunter und entpacke die `.zip`-Datei.
-3. Installiere `StrongTracker.ipa` direkt über **TrollStore** (oder signiere sie über AltStore / SideStore / Sideloadly).
+1. Öffne den Tab **[Actions](https://github.com/lukaswalzik/strong-tracker/actions/workflows/build-ipa.yml)** und wähle den letzten erfolgreichen Lauf von **Build Unsigned IPA**.
+2. Lade das Artifact **`PeakLog-ipa`** herunter und entpacke die `.zip`-Datei.
+3. Installiere `PeakLog.ipa` direkt über **TrollStore** (HealthKit-Entitlements & Live-Activity-Extension sind bereits ad-hoc eingebettet).
 
-> **Wichtig bei Updates:** Die feste Bundle-ID `com.local.strongtracker` sorgt dafür, dass deine lokale Datenbank und Fotos beim Drüberinstallieren neuer Versionen erhalten bleiben.
+> **Wichtig bei Updates:** Die feste Bundle-ID `com.local.strongtracker` bleibt unverändert, sodass deine lokale Datenbank, Fotos und Einstellungen beim Drüberinstallieren vollständig erhalten bleiben.
 
 ### Option 2: Selbst mit XcodeGen bauen (macOS)
 
 Voraussetzungen: macOS mit Xcode (iOS 16.5+ SDK) und [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```bash
-git clone https://github.com/Peterpimmle/strong-tracker.git
+git clone https://github.com/lukaswalzik/strong-tracker.git
 cd strong-tracker
 
 brew install xcodegen
@@ -121,39 +114,26 @@ xcodegen generate
 open StrongTracker.xcodeproj
 ```
 
-Oder als unsignierter Release-Build per Kommandozeile (wie in CI):
-
-```bash
-xcodegen generate
-xcodebuild \
-  -project StrongTracker.xcodeproj \
-  -scheme StrongTracker \
-  -configuration Release \
-  -sdk iphoneos \
-  -derivedDataPath build \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_IDENTITY="" \
-  build
-```
-
 ---
 
 ## Tech-Stack & Architektur
 
 - **UI:** SwiftUI (strikt kompatibel ab **iOS 16.5**), `NavigationStack`, `ObservableObject` / `@StateObject` / `@EnvironmentObject`
+- **Live Activities & Dynamic Island:** `ActivityKit` + `WidgetKit` Extension (`LiveActivityExtension/`)
+- **Health & Sensorik:** `HealthKit` (`HKAnchoredObjectQuery`, `HKWorkoutBuilder`) & `Darwin` Dual-Stack UDP Socket (`DispatchSourceRead`)
 - **Diagramme:** Swift Charts
 - **Persistenz:** [GRDB.swift](https://github.com/groue/GRDB.swift) (SQLite mit versionierten Migrationen `v1`–`v12`)
-- **Netzwerk:** `URLSession` (Open Food Facts, Mistral API, Oura API v2) & `Darwin` BSD UDP Socket + `DispatchSourceRead` für Live-Herzfrequenz
 - **Projektverwaltung:** [XcodeGen](https://github.com/yonaskolb/XcodeGen) ([`project.yml`](project.yml)) – keine `.xcodeproj`-Dateien im Repository
-- **CI/CD:** GitHub Actions ([`.github/workflows/build-ipa.yml`](.github/workflows/build-ipa.yml)) baut bei jedem Push auf `main` automatisch `StrongTracker.ipa`
+- **CI/CD:** GitHub Actions ([`.github/workflows/build-ipa.yml`](.github/workflows/build-ipa.yml)) baut bei jedem Push auf `main` automatisch `PeakLog.ipa`
 
 ```text
 Sources/
-├── App/          # StrongTrackerApp, RootTabView & ActiveWorkoutBanner
-├── Database/     # AppDatabase, Migrations (v1–v12), SeedData, SeedFoods
-├── Models/       # Workout, HeartRateSample, CardioSession, Nutrition, Wellness, BackupPayload
-├── Services/     # ActiveWorkoutManager, HeartRateReceiver (UDP), RestTimer, MistralAI, Oura, Backup
-├── Shared/       # Theme, Formatters, 1RM-Rechner, wiederverwendbare Komponenten
-└── Features/     # Start, ActiveWorkout, History, Exercises, Cardio, Nutrition, Bodyweight, Wellness, AI, Gyms, Profile
+├── App/                  # StrongTrackerApp, RootTabView & ActiveWorkoutBanner
+├── Database/             # AppDatabase, Migrations (v1–v12), SeedData, SeedFoods
+├── Models/               # Workout, HeartRateSample, CardioSession, Nutrition, Wellness, BackupPayload
+├── Services/             # ActiveWorkoutManager, HealthKitService, HeartRateReceiver, WorkoutLiveActivityManager, StrongCSVImportService, MistralAI, Oura, Backup
+├── Shared/               # Theme, Formatters, 1RM-Rechner, WorkoutActivityAttributes, Komponenten
+└── Features/             # Start, ActiveWorkout, History, Exercises, Cardio, Nutrition, Bodyweight, Wellness, AI, Gyms, Profile
+
+LiveActivityExtension/    # Dynamic Island & Lock Screen WidgetKit Extension
 ```

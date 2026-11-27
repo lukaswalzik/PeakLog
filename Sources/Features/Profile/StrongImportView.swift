@@ -34,7 +34,7 @@ struct StrongImportView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.shield.fill")
                         .foregroundColor(.green)
-                    Text("Bestehende Trainings, Routinen, Ernährung und Fotos in StrongTracker bleiben vollständig erhalten.")
+                    Text("Bestehende Trainings, Routinen, Ernährung und Fotos in PeakLog bleiben vollständig erhalten.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -157,7 +157,7 @@ struct StrongImportView: View {
                 if !preview.newExerciseNames.isEmpty {
                     Section(
                         header: Text("Neue Übungen (\(preview.newExerciseNames.count))"),
-                        footer: Text("Bekannte Strong-Übungen werden automatisch deinen bestehenden StrongTracker-Übungen (inkl. Illustrationen) zugeordnet. Alle weiteren werden automatisch mit passender Muskelgruppe & Equipment angelegt.")
+                        footer: Text("Bekannte Strong-Übungen werden automatisch deinen bestehenden PeakLog-Übungen (inkl. Illustrationen) zugeordnet. Alle weiteren werden automatisch mit passender Muskelgruppe & Equipment angelegt.")
                     ) {
                         ForEach(preview.newExerciseNames.prefix(8), id: \.self) { name in
                             Text(name)

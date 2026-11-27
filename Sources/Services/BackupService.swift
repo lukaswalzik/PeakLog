@@ -75,6 +75,6 @@ enum BackupService {
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         let suffix = includePhotos ? "-Komplett-Mit-Fotos" : ""
-        return "StrongTracker-Backup\(suffix)-\(formatter.string(from: date)).json"
+        return "PeakLog-Backup\(suffix)-\(formatter.string(from: date)).json"
     }
 }

@@ -77,7 +77,7 @@ struct WorkoutRecapSheetView: View {
                     if let image = renderedShareImage {
                         ShareLink(
                             item: Image(uiImage: image),
-                            preview: SharePreview("StrongTracker – \(recap.workoutName)", image: Image(uiImage: image))
+                            preview: SharePreview("PeakLog – \(recap.workoutName)", image: Image(uiImage: image))
                         ) {
                             Label("Recap-Card als Bild teilen", systemImage: "square.and.arrow.up")
                                 .font(.headline)
@@ -122,7 +122,7 @@ struct WorkoutRecapSheetView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundColor(.yellow)
-                        Text("STRONGTRACKER RECAP")
+                        Text("PEAKLOG RECAP")
                             .font(.caption2)
                             .fontWeight(.heavy)
                             .tracking(1.1)

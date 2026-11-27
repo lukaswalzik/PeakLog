@@ -170,7 +170,7 @@ struct NutritionGoalsView: View {
 
                 Section(
                     header: Text("Trainingstag vs. Ruhetag"),
-                    footer: Text("Wenn aktiviert, erkennt StrongTracker automatisch deine Trainingstage (Kraft oder Cardio) und passt Kalorien & Kohlenhydrate an. Du kannst den Tag im Ernährungs-Tab auch jederzeit per 1 Tap umschalten.")
+                    footer: Text("Wenn aktiviert, erkennt PeakLog automatisch deine Trainingstage (Kraft oder Cardio) und passt Kalorien & Kohlenhydrate an. Du kannst den Tag im Ernährungs-Tab auch jederzeit per 1 Tap umschalten.")
                 ) {
                     Toggle("Extra-Ziele an Trainingstagen", isOn: $draft.useTrainingDayTargets)
 

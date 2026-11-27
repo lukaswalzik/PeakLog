@@ -234,7 +234,7 @@ enum ProgressEngine {
         case 10...14: return "Kraftpaket"
         case 15...19: return "Hypertrophie-Profi"
         case 20...29: return "Eisen-Veteran"
-        default: return "StrongTracker-Legende"
+        default: return "PeakLog-Legende"
         }
     }
 

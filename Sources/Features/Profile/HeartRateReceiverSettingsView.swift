@@ -102,7 +102,7 @@ struct HeartRateReceiverSettingsView: View {
 
             Section(
                 header: Text("Empfänger & Selbsttest"),
-                footer: Text("Tippe auf „Test-Paket senden“, um zu prüfen, ob der UDP-Empfänger in StrongTracker lokal empfängt. Wenn der Test 74 bpm anzeigt, aber von airpods-hf-bridge 0 Roh-Pakete ankommen, sendet die Bridge im Hintergrund nicht auf Port \(heartRateReceiver.port) (z. B. weil iOS die Bridge beim App-Wechsel pausiert).")
+                footer: Text("Tippe auf „Test-Paket senden“, um zu prüfen, ob der UDP-Empfänger in PeakLog lokal empfängt. Wenn der Test 74 bpm anzeigt, aber von airpods-hf-bridge 0 Roh-Pakete ankommen, sendet die Bridge im Hintergrund nicht auf Port \(heartRateReceiver.port) (z. B. weil iOS die Bridge beim App-Wechsel pausiert).")
             ) {
                 Toggle("Live-HF-Empfänger aktiv", isOn: $heartRateReceiver.isEnabled)
 

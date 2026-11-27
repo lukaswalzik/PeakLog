@@ -291,7 +291,7 @@ private struct LockScreenWorkoutBannerView: View {
                             .foregroundColor(.white.opacity(0.75))
                             .lineLimit(1)
                     } else {
-                        Text("StrongTracker · Aktives Training")
+                        Text("PeakLog · Aktives Training")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
                             .lineLimit(1)

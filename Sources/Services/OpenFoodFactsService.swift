@@ -18,7 +18,7 @@ enum OpenFoodFactsError: LocalizedError {
 }
 
 enum OpenFoodFactsService {
-    private static let userAgent = "StrongTracker-iOS/0.4.1 (local fitness tracker)"
+    private static let userAgent = "PeakLog-iOS/1.0 (local fitness tracker)"
 
     static func fetchProduct(barcode: String) async throws -> FoodItem {
         let cleaned = barcode.trimmingCharacters(in: .whitespacesAndNewlines)

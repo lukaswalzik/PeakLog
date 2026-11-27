@@ -103,7 +103,7 @@ struct AppleHealthView: View {
                 // Authorization & Controls
                 Section(
                     header: Text("Verbindung & Live-Sync"),
-                    footer: Text("Sobald Apple Health verbunden ist, liest StrongTracker neue Herzfrequenz-Werte (z. B. von AirPods HF Bridge oder Apple Watch) in Echtzeit aus Apple Health aus, zeigt sie im Kraft-Workout & Live-Cardio-Timer an und wählt automatisch die passende HF-Zone.")
+                    footer: Text("Sobald Apple Health verbunden ist, liest PeakLog neue Herzfrequenz-Werte (z. B. von AirPods HF Bridge oder Apple Watch) in Echtzeit aus Apple Health aus, zeigt sie im Kraft-Workout & Live-Cardio-Timer an und wählt automatisch die passende HF-Zone.")
                 ) {
                     if !healthKitService.isConnected {
                         Button {
@@ -201,7 +201,7 @@ struct AppleHealthView: View {
                     // Bodyweight import
                     Section(
                         header: Text("Körpergewicht importieren"),
-                        footer: Text("Importiert Gewichtsmessungen der letzten 90 Tage aus Apple Health (bereits vorhandene Tage in StrongTracker werden übersprungen).")
+                        footer: Text("Importiert Gewichtsmessungen der letzten 90 Tage aus Apple Health (bereits vorhandene Tage in PeakLog werden übersprungen).")
                     ) {
                         Button {
                             importBodyweightFromHealth()

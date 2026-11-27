@@ -210,7 +210,7 @@ struct AdaptiveTDEESheetView: View {
                         Text("Wie funktioniert das?")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                        Text("Ähnlich wie bei MacroFactor vergleicht StrongTracker deine durchschnittliche Kalorienzufuhr der letzten 28 Tage mit deinem geglätteten Gewichtstrend (1 kg ≈ 7.700 kcal). So werden individuelle Unterschiede bei NEAT, Körperbau und Stoffwechsel automatisch ausgeglichen.")
+                        Text("Ähnlich wie bei MacroFactor vergleicht PeakLog deine durchschnittliche Kalorienzufuhr der letzten 28 Tage mit deinem geglätteten Gewichtstrend (1 kg ≈ 7.700 kcal). So werden individuelle Unterschiede bei NEAT, Körperbau und Stoffwechsel automatisch ausgeglichen.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

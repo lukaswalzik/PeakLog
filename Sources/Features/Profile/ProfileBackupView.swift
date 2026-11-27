@@ -152,7 +152,7 @@ struct ProfileBackupView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("StrongTracker Wrapped")
+                                Text("PeakLog Wrapped")
                                     .font(.headline)
                                 Text("Monats- & Jahresrückblick, bewegte Tonnen & Highlights")
                                     .font(.caption)
@@ -645,7 +645,7 @@ struct ProfileBackupView: View {
             } catch {
                 showStatus(
                     title: "Ungültige Backup-Datei",
-                    message: "Die Datei konnte nicht als StrongTracker-JSON gelesen werden: \(error.localizedDescription)"
+                    message: "Die Datei konnte nicht als PeakLog-JSON gelesen werden: \(error.localizedDescription)"
                 )
             }
         }

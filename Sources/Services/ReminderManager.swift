@@ -89,7 +89,7 @@ final class ReminderManager: ObservableObject {
                     id: Self.workoutId,
                     time: self.workoutTime,
                     title: "Zeit fürs Training 💪",
-                    body: "Bereit für deine nächste StrongTracker-Einheit?"
+                    body: "Bereit für deine nächste PeakLog-Einheit?"
                 )
             }
         }

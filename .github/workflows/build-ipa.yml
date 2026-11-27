@@ -45,16 +45,16 @@ jobs:
             build/Build/Products/Release-iphoneos/StrongTracker.app
           codesign -d --entitlements :- build/Build/Products/Release-iphoneos/StrongTracker.app
 
-      - name: Package StrongTracker.ipa
+      - name: Package PeakLog.ipa
         run: |
-          rm -rf Payload StrongTracker.ipa
+          rm -rf Payload PeakLog.ipa
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/StrongTracker.app Payload/
-          zip -r StrongTracker.ipa Payload
+          zip -r PeakLog.ipa Payload
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StrongTracker-ipa
-          path: StrongTracker.ipa
+          name: PeakLog-ipa
+          path: PeakLog.ipa
           if-no-files-found: error

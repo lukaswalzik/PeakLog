@@ -105,7 +105,7 @@ struct WrappedSummaryView: View {
                     HStack {
                         Image(systemName: "trophy.fill")
                             .foregroundColor(.yellow)
-                        Text("STRONGTRACKER WRAPPED")
+                        Text("PEAKLOG WRAPPED")
                             .font(.caption2)
                             .fontWeight(.heavy)
                             .tracking(1.1)

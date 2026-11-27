@@ -344,7 +344,7 @@ final class MistralAIService: ObservableObject {
     func generateCoachingReport(dataSummary: String, question: String) async throws -> String {
         let systemPrompt = """
         Du bist ein evidenzbasierter Kraftsport-, Hypertrophie- und Ernährungs-Coach (auf Deutsch, per Du).
-        Du analysierst die echten Trainings- und Ernährungsdaten des Nutzers aus StrongTracker.
+        Du analysierst die echten Trainings- und Ernährungsdaten des Nutzers aus PeakLog.
         Strukturiere deine Antwort klar, knapp und praxisnah mit kurzen Abschnitten und Bulletpoints:
         1. Was richtig gut läuft
         2. Auffälligkeiten / Baustellen
@@ -353,7 +353,7 @@ final class MistralAIService: ObservableObject {
         """
 
         let userMessage = """
-        Hier sind meine aktuellen Daten aus StrongTracker:
+        Hier sind meine aktuellen Daten aus PeakLog:
         \(dataSummary)
 
         Meine Frage / Fokus:
