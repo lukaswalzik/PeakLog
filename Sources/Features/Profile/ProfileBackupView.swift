@@ -11,6 +11,7 @@ struct ProfileBackupView: View {
     @EnvironmentObject private var wellnessStore: WellnessStore
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
     @EnvironmentObject private var healthKitService: HealthKitService
+    @EnvironmentObject private var liveActivityManager: WorkoutLiveActivityManager
 
     @State private var exportDocument: StrongTrackerBackupDocument? = nil
     @State private var exportIncludesPhotos: Bool = false
@@ -490,8 +491,26 @@ struct ProfileBackupView: View {
                     }
                 }
 
-                Section(header: Text("Pausentimer")) {
+                Section(
+                    header: Text("Pausentimer & Live Activity"),
+                    footer: Text("Zeigt während eines aktiven Workouts den Pausentimer-Countdown, Live-Puls und Satz-Fortschritt in der Dynamic Island und auf dem Sperrbildschirm.")
+                ) {
                     Toggle("Auto-Pause nach Satz-Abhaken", isOn: $restTimerManager.autoStartEnabled)
+                    Toggle("Dynamic Island & Live Activity", isOn: $liveActivityManager.isEnabled)
+
+                    if !liveActivityManager.areSystemActivitiesEnabled {
+                        HStack {
+                            Text("iOS Live-Aktivitäten")
+                            Spacer()
+                            Text("In Einstellungen deaktiviert")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    } else if let liveErr = liveActivityManager.lastError {
+                        Text(liveErr)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
 
                     HStack {
                         Text("Benachrichtigungen")
@@ -702,5 +721,6 @@ struct ProfileBackupView_Previews: PreviewProvider {
             .environmentObject(WellnessStore(database: db))
             .environmentObject(HeartRateReceiver(autoStart: false))
             .environmentObject(HealthKitService(autoStart: false))
+            .environmentObject(WorkoutLiveActivityManager())
     }
 }

@@ -77,6 +77,13 @@ struct RootTabView: View {
                 restTimerManager.skip()
             }
         }
+        .onOpenURL { url in
+            if url.scheme == "strongtracker" && url.host == "active-workout" {
+                if activeWorkoutManager.hasActiveWorkout {
+                    activeWorkoutManager.isPresentingSheet = true
+                }
+            }
+        }
     }
 }
 
@@ -179,5 +186,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(WellnessStore(database: db))
             .environmentObject(HeartRateReceiver(autoStart: false))
             .environmentObject(HealthKitService(autoStart: false))
+            .environmentObject(WorkoutLiveActivityManager())
     }
 }

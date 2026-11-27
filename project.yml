@@ -33,6 +33,8 @@ targets:
     dependencies:
       - package: GRDB
         product: GRDB
+      - target: StrongTrackerLiveActivity
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.local.strongtracker
@@ -40,6 +42,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Resources/StrongTracker-Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: StrongTracker
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -50,6 +53,27 @@ targets:
         INFOPLIST_KEY_NSHealthShareUsageDescription: "StrongTracker liest deine Live-Herzfrequenz, Körpergewicht sowie Aktivitäts- und Erholungsdaten aus Apple Health, um sie im Training anzuzeigen und zu speichern."
         INFOPLIST_KEY_NSHealthUpdateUsageDescription: "StrongTracker speichert abgeschlossene Kraft- und Cardio-Workouts auf Wunsch in Apple Health."
         CODE_SIGN_ENTITLEMENTS: Resources/StrongTracker.entitlements
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+
+  StrongTrackerLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.5"
+    sources:
+      - path: LiveActivityExtension
+      - path: Sources/Shared/LiveActivity/WorkoutActivityAttributes.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.local.strongtracker.liveactivity
+        PRODUCT_NAME: StrongTrackerLiveActivity
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Resources/LiveActivity-Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: StrongTracker Live
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""

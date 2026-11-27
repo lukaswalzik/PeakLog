@@ -33,8 +33,12 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build
 
-      - name: Embed HealthKit entitlements (ad-hoc sign for TrollStore)
+      - name: Embed HealthKit entitlements & ad-hoc sign for TrollStore
         run: |
+          ls -la build/Build/Products/Release-iphoneos/StrongTracker.app/PlugIns/
+          codesign --force --sign - \
+            --timestamp=none \
+            build/Build/Products/Release-iphoneos/StrongTracker.app/PlugIns/StrongTrackerLiveActivity.appex
           codesign --force --sign - \
             --entitlements Resources/StrongTracker.entitlements \
             --timestamp=none \

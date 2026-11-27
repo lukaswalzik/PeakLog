@@ -48,6 +48,7 @@
 - **Routinen & Vorlagen:** Eigene Trainingspläne erstellen, sortieren, per **Deload-Modus** (−20 % Gewicht, reduziertes Volumen) starten und nach dem Training direkt aktualisieren.
 - **Aktives Workout-Logging:** Vorherige Sätze pro Gym im Blick, Satztypen (`Arbeitssatz`, `Aufwärmsatz`, `Dropset`, `Muskelversagen`), **RIR-Tracking**, **Supersätze**, Aufwärmsatz-Generator und schnelles Ersetzen besetzter Geräte.
 - **Smart Progression & Live-PRs:** Automatische Double-Progression-Empfehlungen, Live-PR-Erkennung (geschätztes 1RM nach Epley), automatischer **Pausentimer** inkl. lokaler Benachrichtigungen und minimierbarem Workout-Banner.
+- **Dynamic Island & Sperrbildschirm Live Activity:** Zeigt Pausentimer-Countdown, Live-Herzfrequenz + Zone, aktuelle Übung und Satz-Fortschritt live in der **Dynamic Island** (iPhone 14 Pro) und auf dem Sperrbildschirm (`ActivityKit`).
 - **Multi-Gym-Support & Übungsbibliothek:** Mehrere Studios/Homegyms verwalten, Gym-spezifische Geräte-/Setup-Notizen speichern, 36 integrierte Übungs-Illustrationen + eigene Übungsfotos.
 - **Workout-Recap-Cards:** Teilbare Abschlusskarten mit Dauer, Volumen, Sätzen, neuen Bestleistungen und Herzfrequenz-Zusammenfassung.
 
