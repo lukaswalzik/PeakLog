@@ -112,15 +112,6 @@ struct NutritionView: View {
                         .accessibilityLabel("Mahlzeit fotografieren (KI)")
 
                         Button {
-                            openAIScannerCamera = false
-                            isShowingAIScanner = true
-                        } label: {
-                            Image(systemName: "sparkles")
-                                .font(.title3)
-                        }
-                        .accessibilityLabel("KI-Scanner")
-
-                        Button {
                             openScannerDirectly = true
                             addSheetMeal = defaultMealForCurrentHour()
                         } label: {
@@ -341,67 +332,58 @@ struct NutritionView: View {
                 )
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
                     openAIScannerCamera = false
                     isShowingAIScanner = true
                 } label: {
-                    Label("KI-Foto-Scan", systemImage: "camera.viewfinder")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.viewfinder")
+                        Text("KI-Foto-Scan")
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
 
-                Button {
-                    isShowingRecipeChef = true
-                } label: {
-                    Label("KI-Makro-Koch", systemImage: "flame.fill")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .controlSize(.small)
-            }
+                Menu {
+                    Button {
+                        isShowingRecipeChef = true
+                    } label: {
+                        Label("KI-Makro-Koch (Rezept-Idee)", systemImage: "flame.fill")
+                    }
 
-            HStack(spacing: 8) {
-                Button {
-                    isShowingMacroHelper = true
-                } label: {
-                    Label("Was fehlt?", systemImage: "wand.and.stars")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                    Button {
+                        isShowingMacroHelper = true
+                    } label: {
+                        Label("Was fehlt? (Makro-Helfer)", systemImage: "wand.and.stars")
+                    }
 
-                Button {
-                    isShowingDayTemplates = true
-                } label: {
-                    Label("Tages-Vorlagen", systemImage: "doc.on.doc")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                    Button {
+                        isShowingDayTemplates = true
+                    } label: {
+                        Label("Tages-Vorlagen", systemImage: "doc.on.doc")
+                    }
 
-                Button {
-                    isShowingAdaptiveTDEE = true
+                    Button {
+                        isShowingAdaptiveTDEE = true
+                    } label: {
+                        Label("Adaptiver TDEE-Rechner", systemImage: "waveform.path.ecg")
+                    }
                 } label: {
-                    Label("TDEE", systemImage: "waveform.path.ecg")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                        Text("Tools & KI")
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)

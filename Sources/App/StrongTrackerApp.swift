@@ -17,6 +17,7 @@ struct StrongTrackerApp: App {
     @StateObject private var healthKitService: HealthKitService
     @StateObject private var liveActivityManager: WorkoutLiveActivityManager
     @StateObject private var widgetSyncManager: WidgetDataSyncManager
+    @StateObject private var themeManager: ThemeManager
 
     init() {
         let db = AppDatabase.shared
@@ -82,6 +83,7 @@ struct StrongTrackerApp: App {
         _healthKitService = StateObject(wrappedValue: hkService)
         _liveActivityManager = StateObject(wrappedValue: activityManager)
         _widgetSyncManager = StateObject(wrappedValue: widgetSync)
+        _themeManager = StateObject(wrappedValue: ThemeManager())
 
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
@@ -106,6 +108,9 @@ struct StrongTrackerApp: App {
                 .environmentObject(healthKitService)
                 .environmentObject(liveActivityManager)
                 .environmentObject(widgetSyncManager)
+                .environmentObject(themeManager)
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
         }
     }
 }

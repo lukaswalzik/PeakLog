@@ -12,6 +12,7 @@ struct RootTabView: View {
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
     @EnvironmentObject private var restTimerManager: RestTimerManager
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
+    @EnvironmentObject private var themeManager: ThemeManager
     @State private var selectedTab: Tab = .start
 
     var body: some View {
@@ -68,9 +69,13 @@ struct RootTabView: View {
         }
         .sheet(isPresented: $activeWorkoutManager.isPresentingSheet) {
             ActiveWorkoutView()
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
         }
         .sheet(item: $activeWorkoutManager.lastCompletedRecap) { recap in
             WorkoutRecapSheetView(recap: recap)
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
         }
         .onChange(of: activeWorkoutManager.hasActiveWorkout) { isActive in
             if !isActive {
@@ -203,5 +208,6 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(HeartRateReceiver(autoStart: false))
             .environmentObject(HealthKitService(autoStart: false))
             .environmentObject(WorkoutLiveActivityManager())
+            .environmentObject(ThemeManager())
     }
 }

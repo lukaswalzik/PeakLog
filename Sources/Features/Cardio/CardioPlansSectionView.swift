@@ -5,12 +5,15 @@ struct CardioPlansSectionView: View {
 
     let onStartSession: (CardioPlanSession) -> Void
     var compactForStartTab: Bool = false
+    var startCollapsed: Bool = false
 
     @State private var isShowingCreatePlan: Bool = false
     @State private var editingPlan: CardioPlan? = nil
     @State private var planToDelete: CardioPlan? = nil
     @State private var showProgressionGuide: Bool = false
     @State private var expandedSessionId: String? = nil
+    @State private var sessionsExpanded: Bool = true
+    @State private var didInitCollapse: Bool = false
 
     private var activePlan: CardioPlan? {
         cardioStore.activePlan
@@ -21,12 +24,23 @@ struct CardioPlansSectionView: View {
             if let plan = activePlan {
                 planHeaderCard(plan)
 
-                ForEach(plan.sessions.sorted { $0.sortOrder < $1.sortOrder }) { session in
-                    sessionCard(session)
+                if sessionsExpanded {
+                    ForEach(plan.sessions.sorted { $0.sortOrder < $1.sortOrder }) { session in
+                        sessionCard(session)
+                    }
                 }
             } else {
                 emptyPlanCard
             }
+        }
+        .onAppear {
+            if !didInitCollapse {
+                didInitCollapse = true
+                sessionsExpanded = !startCollapsed
+            }
+        }
+        .onChange(of: startCollapsed) { collapsed in
+            sessionsExpanded = !collapsed
         }
         .sheet(isPresented: $isShowingCreatePlan) {
             CardioPlanEditorView { newPlan in
@@ -209,6 +223,27 @@ struct CardioPlansSectionView: View {
                         .background(Color(uiColor: .tertiarySystemGroupedBackground))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
+            }
+
+            if compactForStartTab && !plan.sessions.isEmpty {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        sessionsExpanded.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text(sessionsExpanded ? "Einheiten ausblenden" : "\(plan.sessions.count) Einheiten anzeigen & starten")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.accentColor)
+                        Spacer()
+                        Image(systemName: sessionsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
+                    }
+                    .padding(.top, 2)
+                }
+                .buttonStyle(.plain)
             }
         }
         .strongCard()

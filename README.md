@@ -74,7 +74,8 @@
 - **Freitext-Logging & Rezept-Chef:** Mahlzeiten in natürlicher Sprache eintragen oder Rezepte passend zu den offenen Rest-Makros generieren lassen.
 - **KI-Coach & Trainingsplan-Generator:** Datenbasierte Trainings-/Ernährungsanalysen, Post-Workout-Feedback und komplette Trainingspläne per 1-Tap als Routinen speicherbar (Mistral Small 4 / Large 4).
 
-### Wellness, Oura Ring & Fortschritt
+### Wellness, Oura Ring, Design & Fortschritt
+- **Wählbare Designs & Dark/White Mode:** Umschaltbar zwischen **Hell (White Mode)**, **Dunkel (Dark Mode)** und **System** sowie **5 kuratierte Farb-Themes** (*Liquid Blue*, *Obsidian Minimal*, *Emerald Vitality*, *Sunset Ember*, *Royal Violet*) plus optionalem Fokus-Startbildschirm und aufgeräumtem Profil-Hub.
 - **Oura Ring (API v2, OAuth2):** Synchronisiert Readiness, Schlaf, HRV, Ruhepuls, Aktivität, Stress, SpO2 und Workouts direkt in die App.
 - **Sauna & Kälte-Tracker:** Eigener **Live Sauna-Timer** (Hitze- vs. Abkühlphasen, Gang-Zähler, Live-Puls-Anzeige inkl. Hochpuls-Hinweis & +500 ml Wasser-Bonus) sowie manuelles Logging (Finnisch, Bio-Sauna, Dampfbad, Infrarot, Temperatur, Gänge, Kaltdusche/Eisbad, Erholungsgefühl & 8-Wochen-Balkendiagramm).
 - **Körperfortschritt:** Körpergewicht mit **interaktivem Vorher/Nachher-Wisch-Slider** & Nebeneinander-Vergleich (inkl. Gewichts-, Zeit- & **US-Navy-KFA-Differenz**, Thumbnail-Auswahlleiste & teilbarer PeakLog Transformation Card), Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.

@@ -8,6 +8,7 @@ struct StartView: View {
     @EnvironmentObject private var bodyweightStore: BodyweightStore
     @EnvironmentObject private var gymStore: GymStore
     @EnvironmentObject private var nutritionStore: NutritionStore
+    @EnvironmentObject private var themeManager: ThemeManager
 
     @State private var isShowingCreateRoutine: Bool = false
     @State private var editingRoutine: RoutineWithExercises? = nil
@@ -117,7 +118,8 @@ struct StartView: View {
                         onStartSession: { planned in
                             plannedCardioToStart = planned
                         },
-                        compactForStartTab: true
+                        compactForStartTab: true,
+                        startCollapsed: themeManager.compactStartScreen
                     )
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                     .listRowBackground(Color.clear)
@@ -337,7 +339,7 @@ struct StartView: View {
                             .fontWeight(.semibold)
                     }
                     .font(.subheadline)
-                    .foregroundColor(Color(red: 0.11, green: 0.36, blue: 0.92))
+                    .foregroundColor(themeManager.preset.accentColor)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
                     .background(Color.white)
@@ -372,9 +374,9 @@ struct StartView: View {
             }
         }
         .padding(16)
-        .background(AppTheme.heroGradient)
+        .background(themeManager.preset.heroGradient)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: Color.blue.opacity(0.22), radius: 8, x: 0, y: 4)
+        .shadow(color: themeManager.preset.accentColor.opacity(0.22), radius: 8, x: 0, y: 4)
     }
 
     private var weeklyDigestCard: some View {
@@ -594,5 +596,8 @@ struct StartView_Previews: PreviewProvider {
             .environmentObject(HistoryStore(database: db))
             .environmentObject(CardioStore(database: db))
             .environmentObject(BodyweightStore(database: db))
+            .environmentObject(GymStore(database: db))
+            .environmentObject(NutritionStore(database: db))
+            .environmentObject(ThemeManager())
     }
 }
