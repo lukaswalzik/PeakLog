@@ -395,6 +395,10 @@ enum Migrations {
             )
         }
 
+        migrator.registerMigration("v15_seed_plate_loaded_and_smith_exercises") { db in
+            try SeedData.insertDefaultExercises(in: db)
+        }
+
         return migrator
     }
 }
