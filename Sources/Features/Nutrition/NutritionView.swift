@@ -14,6 +14,7 @@ struct NutritionView: View {
     @State private var isShowingAdaptiveTDEE: Bool = false
     @State private var isShowingMacroHelper: Bool = false
     @State private var isShowingAIScanner: Bool = false
+    @State private var openAIScannerCamera: Bool = false
     @State private var isShowingRecipeChef: Bool = false
     @State private var isShowingDayTemplates: Bool = false
     @State private var showMicrosExpanded: Bool = false
@@ -102,6 +103,16 @@ struct NutritionView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
                         Button {
+                            openAIScannerCamera = true
+                            isShowingAIScanner = true
+                        } label: {
+                            Image(systemName: "camera.viewfinder")
+                                .font(.title3)
+                        }
+                        .accessibilityLabel("Mahlzeit fotografieren (KI)")
+
+                        Button {
+                            openAIScannerCamera = false
                             isShowingAIScanner = true
                         } label: {
                             Image(systemName: "sparkles")
@@ -136,7 +147,13 @@ struct NutritionView: View {
                 AdaptiveTDEESheetView()
             }
             .sheet(isPresented: $isShowingAIScanner) {
-                AIMealScannerSheetView(initialMealType: defaultMealForCurrentHour())
+                AIMealScannerSheetView(
+                    initialMealType: defaultMealForCurrentHour(),
+                    autoOpenCamera: openAIScannerCamera
+                )
+                .onDisappear {
+                    openAIScannerCamera = false
+                }
             }
             .sheet(isPresented: $isShowingRecipeChef) {
                 AIRecipeChefSheetView(
@@ -326,9 +343,10 @@ struct NutritionView: View {
 
             HStack(spacing: 8) {
                 Button {
+                    openAIScannerCamera = false
                     isShowingAIScanner = true
                 } label: {
-                    Label("KI-Scanner", systemImage: "sparkles")
+                    Label("KI-Foto-Scan", systemImage: "camera.viewfinder")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)

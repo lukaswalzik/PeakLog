@@ -16,9 +16,18 @@ struct ActiveWorkoutView: View {
     @State private var isShowingDiscardAlert: Bool = false
     @State private var hasLoadedHeader: Bool = false
     @State private var fullscreenPhoto: (image: UIImage, title: String)? = nil
+    private struct PlateCalculatorTarget: Identifiable {
+        let id = UUID()
+        let initialWeightKg: Double
+        let exerciseName: String?
+        let defaultBarWeightOverride: Double?
+        let targetSet: WorkoutSet?
+    }
+
     @State private var exerciseToReplace: WorkoutExerciseDetail? = nil
     @State private var setupNoteTarget: WorkoutExerciseDetail? = nil
     @State private var setupNoteDraft: String = ""
+    @State private var plateCalculatorTarget: PlateCalculatorTarget? = nil
 
     var body: some View {
         NavigationStack {
@@ -147,6 +156,21 @@ struct ActiveWorkoutView: View {
                                 .foregroundColor(restTimerManager.isRunning ? .accentColor : .primary)
                         }
                         .accessibilityLabel("Pausentimer")
+
+                        Button {
+                            dismissKeyboard()
+                            plateCalculatorTarget = PlateCalculatorTarget(
+                                initialWeightKg: 60,
+                                exerciseName: nil,
+                                defaultBarWeightOverride: nil,
+                                targetSet: nil
+                            )
+                        } label: {
+                            Image(systemName: "scalemass")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                        }
+                        .accessibilityLabel("Scheibenrechner")
                     }
                 }
 
@@ -223,6 +247,22 @@ struct ActiveWorkoutView: View {
                 if let photo = fullscreenPhoto {
                     FullscreenImageView(image: photo.image, caption: photo.title)
                 }
+            }
+            .sheet(item: $plateCalculatorTarget) { target in
+                PlateCalculatorSheetView(
+                    initialWeightKg: target.initialWeightKg,
+                    exerciseName: target.exerciseName,
+                    gymId: activeWorkoutManager.activeWorkout?.workout.gymId,
+                    gymName: activeWorkoutManager.activeWorkout?.gymName,
+                    defaultBarWeightOverride: target.defaultBarWeightOverride,
+                    onApplyWeight: target.targetSet.map { setToUpdate in
+                        { newWeight in
+                            var updated = setToUpdate
+                            updated.weightKg = newWeight
+                            activeWorkoutManager.updateSet(updated)
+                        }
+                    }
+                )
             }
             .alert(
                 "Setup-Notiz (\(activeWorkoutManager.activeWorkout?.gymName ?? "Allgemein"))",
@@ -396,7 +436,28 @@ struct ActiveWorkoutView: View {
 
                 Spacer()
 
+                if exerciseDetail.exercise.equipment == .barbell || exerciseDetail.exercise.equipment == .machine {
+                    Button {
+                        openPlateCalculator(for: exerciseDetail, set: nil)
+                    } label: {
+                        Image(systemName: "scalemass")
+                            .font(.subheadline)
+                            .foregroundColor(.accentColor)
+                            .padding(6)
+                            .background(Color.accentColor.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Scheibenrechner öffnen")
+                }
+
                 Menu {
+                    Button {
+                        openPlateCalculator(for: exerciseDetail, set: nil)
+                    } label: {
+                        Label("Scheibenrechner", systemImage: "scalemass")
+                    }
+
                     Button {
                         setupNoteDraft = exerciseDetail.setupNote ?? ""
                         setupNoteTarget = exerciseDetail
@@ -563,6 +624,9 @@ struct ActiveWorkoutView: View {
                                 id: set.id,
                                 workoutExerciseId: exerciseDetail.id
                             )
+                        },
+                        onOpenPlateCalculator: {
+                            openPlateCalculator(for: exerciseDetail, set: set)
                         }
                     )
                 }
@@ -590,6 +654,37 @@ struct ActiveWorkoutView: View {
                     supersetGroup.map { supersetColor(for: $0).opacity(0.6) } ?? Color.primary.opacity(0.06),
                     lineWidth: supersetGroup != nil ? 2 : 1
                 )
+        )
+    }
+
+    private func openPlateCalculator(for exerciseDetail: WorkoutExerciseDetail, set: WorkoutSet?) {
+        dismissKeyboard()
+        let chosenSet = set
+            ?? exerciseDetail.sets.first(where: { !$0.isCompleted && $0.setType != .warmup })
+            ?? exerciseDetail.sets.first(where: { !$0.isCompleted })
+            ?? exerciseDetail.sets.last
+
+        let fallbackPrev = chosenSet.flatMap { exerciseDetail.previousSets[$0.setOrder]?.weightKg }
+        let initialWeight = chosenSet?.weightKg
+            ?? fallbackPrev
+            ?? exerciseDetail.sets.compactMap({ $0.weightKg }).max()
+            ?? 60
+
+        let barOverride: Double?
+        let lowerName = exerciseDetail.exercise.name.lowercased()
+        if exerciseDetail.exercise.equipment == .machine {
+            barOverride = 0
+        } else if lowerName.contains("sz") || lowerName.contains("ez") {
+            barOverride = 10
+        } else {
+            barOverride = nil
+        }
+
+        plateCalculatorTarget = PlateCalculatorTarget(
+            initialWeightKg: initialWeight,
+            exerciseName: exerciseDetail.exercise.name,
+            defaultBarWeightOverride: barOverride,
+            targetSet: chosenSet
         )
     }
 

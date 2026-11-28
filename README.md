@@ -51,7 +51,7 @@
   - **Training & Streak** *(Klein, Mittel + Sperrbildschirm)*: Wochen-Streak, 7-Tage-Wochenaktivität, Wochenvolumen, Level, Readiness & nächste Routine.
   - **Wasser & Supplements** *(Klein + Sperrbildschirm)*: Trinkziel-Fortschritt & abgehakte Supplements heute.
 - **Routinen & Vorlagen:** Eigene Trainingspläne erstellen, sortieren, per **Deload-Modus** (−20 % Gewicht, reduziertes Volumen) starten und nach dem Training direkt aktualisieren.
-- **Aktives Workout-Logging:** Vorherige Sätze pro Gym im Blick, Satztypen (`Arbeitssatz`, `Aufwärmsatz`, `Dropset`, `Muskelversagen`), **RIR-Tracking**, **Supersätze**, Aufwärmsatz-Generator und schnelles Ersetzen besetzter Geräte.
+- **Aktives Workout-Logging:** Vorherige Sätze pro Gym im Blick, Satztypen (`Arbeitssatz`, `Aufwärmsatz`, `Dropset`, `Muskelversagen`), **RIR-Tracking**, **Supersätze**, Aufwärmsatz-Generator, **interaktiver Scheibenrechner (Plate Calculator)** mit Hantel-Vorschau, Gym-Scheiben-Konfiguration & Aufwärm-Leiter sowie schnelles Ersetzen besetzter Geräte.
 - **Smart Progression & Live-PRs:** Automatische Double-Progression-Empfehlungen, Live-PR-Erkennung (geschätztes 1RM nach Epley), automatischer **Pausentimer** inkl. lokaler Benachrichtigungen und minimierbarem Workout-Banner.
 - **Multi-Gym-Support & Übungsbibliothek:** Mehrere Studios/Homegyms verwalten, Gym-spezifische Geräte-/Setup-Notizen speichern, **72 integrierte Übungs-Illustrationen** (Maschinen, Kabelzug, Lang-/Kurzhantel & Körpergewicht) + eigene Übungsfotos.
 - **Workout-Recap-Cards:** Teilbare Abschlusskarten mit Dauer, Volumen, Sätzen, neuen Bestleistungen und Herzfrequenz-Zusammenfassung.
@@ -69,13 +69,13 @@
 - **Hydration & Supplements:** Täglicher Wasser-Tracker mit Tagesziel sowie abhakbare Supplement-Liste (Kreatin, Vitamin D3+K2, Omega-3, Magnesium & eigene).
 
 ### Mistral KI-Assistent *(optional, Bring Your Own Key)*
-- **KI-Mahlzeiten-Scanner (Vision):** Foto vom Teller oder Nährwertetikett (OCR) aufnehmen und automatisch als Nährwerte übernehmen.
+- **KI-Foto-Scanner (Vision):** 1-Tap-Kamera-Scan für Teller oder Nährwertetiketten (OCR) mit automatischer Analyse nach Aufnahme, Portions-Skalierer (`0,5×–2×`), Inline-Bearbeitung je Zutat und optionalem Speichern als Mahlzeit-Vorlage.
 - **Freitext-Logging & Rezept-Chef:** Mahlzeiten in natürlicher Sprache eintragen oder Rezepte passend zu den offenen Rest-Makros generieren lassen.
 - **KI-Coach & Trainingsplan-Generator:** Datenbasierte Trainings-/Ernährungsanalysen, Post-Workout-Feedback und komplette Trainingspläne per 1-Tap als Routinen speicherbar (Mistral Small 4 / Large 4).
 
 ### Wellness, Oura Ring & Fortschritt
 - **Oura Ring (API v2, OAuth2):** Synchronisiert Readiness, Schlaf, HRV, Ruhepuls, Aktivität, Stress, SpO2 und Workouts direkt in die App.
-- **Körperfortschritt:** Körpergewicht mit Vorher/Nachher-Foto-Vergleich, Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.
+- **Körperfortschritt:** Körpergewicht mit **interaktivem Vorher/Nachher-Wisch-Slider** & Nebeneinander-Vergleich (inkl. Gewichts-, Zeit- & **US-Navy-KFA-Differenz**, Thumbnail-Auswahlleiste & teilbarer PeakLog Transformation Card), Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.
 - **Motivation & Analyse:** Fortschritts-Dashboard (1RM- & Gewichtstrends), wöchentliche Muskel-Heatmap, Kraftstandards, **PeakLog Wrapped**, Trainingskalender, Level/XP/Streaks, Meilensteine und lokale Erinnerungen.
 
 ### Datenschutz, Import & Lokales Backup

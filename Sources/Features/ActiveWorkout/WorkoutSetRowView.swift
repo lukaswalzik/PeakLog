@@ -8,6 +8,7 @@ struct WorkoutSetRowView: View {
     let onUpdate: (WorkoutSet) -> Void
     let onToggleComplete: () -> Void
     let onDelete: () -> Void
+    var onOpenPlateCalculator: (() -> Void)? = nil
 
     private enum Field: Hashable {
         case weight
@@ -24,7 +25,8 @@ struct WorkoutSetRowView: View {
         isPR: Bool = false,
         onUpdate: @escaping (WorkoutSet) -> Void,
         onToggleComplete: @escaping () -> Void,
-        onDelete: @escaping () -> Void
+        onDelete: @escaping () -> Void,
+        onOpenPlateCalculator: (() -> Void)? = nil
     ) {
         self.set = set
         self.previous = previous
@@ -32,6 +34,7 @@ struct WorkoutSetRowView: View {
         self.onUpdate = onUpdate
         self.onToggleComplete = onToggleComplete
         self.onDelete = onDelete
+        self.onOpenPlateCalculator = onOpenPlateCalculator
         _weightText = State(initialValue: set.weightKg.map { Formatters.weight($0) } ?? "")
         _repsText = State(initialValue: set.reps.map { "\($0)" } ?? "")
     }
@@ -78,6 +81,15 @@ struct WorkoutSetRowView: View {
                                 Image(systemName: "checkmark")
                             }
                         }
+                    }
+                }
+                if let openPlates = onOpenPlateCalculator {
+                    Divider()
+                    Button {
+                        focusedField = nil
+                        openPlates()
+                    } label: {
+                        Label("Scheibenrechner", systemImage: "scalemass")
                     }
                 }
                 Divider()
