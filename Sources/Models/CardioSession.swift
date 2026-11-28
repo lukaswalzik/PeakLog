@@ -144,6 +144,7 @@ struct CardioSession: Identifiable, Equatable, Hashable, Codable, FetchableRecor
     var zone4Seconds: Int
     var zone5Seconds: Int
     var notes: String?
+    var workoutId: String?
 
     enum Columns {
         static let id = Column(CodingKeys.id)
@@ -160,6 +161,7 @@ struct CardioSession: Identifiable, Equatable, Hashable, Codable, FetchableRecor
         static let zone4Seconds = Column(CodingKeys.zone4Seconds)
         static let zone5Seconds = Column(CodingKeys.zone5Seconds)
         static let notes = Column(CodingKeys.notes)
+        static let workoutId = Column(CodingKeys.workoutId)
     }
 
     init(
@@ -176,7 +178,8 @@ struct CardioSession: Identifiable, Equatable, Hashable, Codable, FetchableRecor
         zone3Seconds: Int = 0,
         zone4Seconds: Int = 0,
         zone5Seconds: Int = 0,
-        notes: String? = nil
+        notes: String? = nil,
+        workoutId: String? = nil
     ) {
         self.id = id
         self.activityType = activityType
@@ -192,6 +195,7 @@ struct CardioSession: Identifiable, Equatable, Hashable, Codable, FetchableRecor
         self.zone4Seconds = zone4Seconds
         self.zone5Seconds = zone5Seconds
         self.notes = notes
+        self.workoutId = workoutId
     }
 
     var totalZoneSeconds: Int {

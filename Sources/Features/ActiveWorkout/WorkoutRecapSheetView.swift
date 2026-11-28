@@ -6,6 +6,7 @@ struct WorkoutRecapSheetView: View {
     @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var bodyweightStore: BodyweightStore
+    @EnvironmentObject private var activeCardioManager: ActiveCardioManager
 
     let recap: CompletedWorkoutRecap
     @State private var renderedShareImage: UIImage? = nil
@@ -34,6 +35,8 @@ struct WorkoutRecapSheetView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     recapCardView
+
+                    attachCardioCard
 
                     if MistralAIService.shared.isConfigured {
                         if let feedback = aiFeedback {
@@ -113,6 +116,81 @@ struct WorkoutRecapSheetView: View {
                 renderShareCard()
             }
         }
+    }
+
+    private var attachCardioCard: some View {
+        let postWorkoutSessions = cardioStore.activePlan?.sessions.filter {
+            $0.timing == .postWorkout || $0.timing == .flexible
+        } ?? []
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "heart.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cardio direkt anhängen?")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Text("Wird zusammen mit „\(recap.workoutName)“ als ein gemeinsames Training gespeichert.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    let workoutId = recap.id
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        activeCardioManager.start(linkedWorkoutId: workoutId)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "stopwatch.fill")
+                        Text("Live-Timer")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+
+                if !postWorkoutSessions.isEmpty {
+                    Menu {
+                        ForEach(postWorkoutSessions) { planned in
+                            Button {
+                                let workoutId = recap.id
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    activeCardioManager.start(plannedSession: planned, linkedWorkoutId: workoutId)
+                                }
+                            } label: {
+                                Label(
+                                    "\(planned.title) (\(planned.targetDurationMinutes) Min)",
+                                    systemImage: planned.activityType.systemImage
+                                )
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "list.bullet.clipboard")
+                            Text("Aus Plan")
+                        }
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard()
     }
 
     private var recapCardView: some View {

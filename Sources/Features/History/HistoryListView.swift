@@ -140,10 +140,11 @@ struct HistoryListView: View {
         } else {
             List {
                 ForEach(filteredWorkouts) { detail in
+                    let linkedCardio = cardioStore.sessions(forWorkoutId: detail.id)
                     NavigationLink {
                         WorkoutDetailView(detail: detail)
                     } label: {
-                        HistoryRowView(detail: detail)
+                        HistoryRowView(detail: detail, linkedCardio: linkedCardio)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
@@ -161,6 +162,7 @@ struct HistoryListView: View {
 
 private struct HistoryRowView: View {
     let detail: WorkoutDetail
+    let linkedCardio: [CardioSession]
 
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -176,9 +178,15 @@ private struct HistoryRowView: View {
         return f
     }()
 
+    private var totalCardioSeconds: Int {
+        linkedCardio.reduce(0) { $0 + $1.durationSeconds }
+    }
+
     private var durationText: String {
         let end = detail.workout.finishedAt ?? detail.workout.startedAt
-        return Formatters.elapsedDuration(from: detail.workout.startedAt, to: end)
+        let strengthSeconds = max(0, Int(end.timeIntervalSince(detail.workout.startedAt)))
+        let combinedEnd = detail.workout.startedAt.addingTimeInterval(TimeInterval(strengthSeconds + totalCardioSeconds))
+        return Formatters.elapsedDuration(from: detail.workout.startedAt, to: combinedEnd)
     }
 
     private var exercisePreview: String {
@@ -189,6 +197,18 @@ private struct HistoryRowView: View {
             .prefix(3)
             .map { "\($0.sets.count)× \($0.exercise.name)" }
             .joined(separator: " · ")
+    }
+
+    private var cardioBadgeSummary: String? {
+        guard !linkedCardio.isEmpty else { return nil }
+        let totalMins = max(1, totalCardioSeconds / 60)
+        if linkedCardio.count == 1, let first = linkedCardio.first {
+            if let avg = first.avgHeartRate {
+                return "+\(totalMins) Min \(first.activityType.displayName) · Ø \(avg) bpm"
+            }
+            return "+\(totalMins) Min \(first.activityType.displayName)"
+        }
+        return "+\(totalMins) Min Cardio (\(linkedCardio.count)×)"
     }
 
     var body: some View {
@@ -214,29 +234,61 @@ private struct HistoryRowView: View {
                         .lineLimit(1)
 
                     if let gymName = detail.gymName {
-                        Label(gymName, systemImage: "mappin.and.ellipse")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.accentColor.opacity(0.12))
-                            .foregroundColor(.accentColor)
-                            .clipShape(Capsule())
-                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.caption2)
+                            Text(gymName)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.12))
+                        .foregroundColor(.accentColor)
+                        .clipShape(Capsule())
                     }
                 }
 
                 HStack(spacing: 10) {
-                    Label(durationText, systemImage: "clock")
-                    Label("\(Formatters.weight(detail.totalVolumeKg)) kg", systemImage: "scalemass")
-                    Label("\(detail.completedSetCount)", systemImage: "checkmark.circle")
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock")
+                        Text(durationText)
+                    }
+                    HStack(spacing: 3) {
+                        Image(systemName: "scalemass")
+                        Text("\(Formatters.weight(detail.totalVolumeKg)) kg")
+                    }
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkmark.circle")
+                        Text("\(detail.completedSetCount)")
+                    }
                     if let avgHR = detail.workout.avgHeartRate {
-                        Label("\(avgHR)", systemImage: "heart.fill")
-                            .foregroundColor(.red)
+                        HStack(spacing: 3) {
+                            Image(systemName: "heart.fill")
+                            Text("\(avgHR)")
+                        }
+                        .foregroundColor(.red)
                     }
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+                if let cardioSummary = cardioBadgeSummary {
+                    HStack(spacing: 4) {
+                        Image(systemName: linkedCardio.first?.activityType.systemImage ?? "heart.fill")
+                            .font(.caption2)
+                        Text(cardioSummary)
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.green.opacity(0.15))
+                    .foregroundColor(.green)
+                    .clipShape(Capsule())
+                }
 
                 Text(exercisePreview)
                     .font(.caption)

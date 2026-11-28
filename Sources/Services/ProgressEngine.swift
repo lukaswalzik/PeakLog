@@ -62,7 +62,9 @@ enum ProgressEngine {
         let totalZone2Minutes = cardioSessions.reduce(0) { $0 + $1.zone2Seconds } / 60
         let totalPhotos = bodyweightEntries.reduce(0) { $0 + $1.photos.count }
 
-        let allActivityDates = workouts.map { $0.workout.startedAt } + cardioSessions.map { $0.startedAt }
+        // Linked cardio sessions are part of their parent strength workout, so count them as one combined session
+        let standaloneCardioDates = cardioSessions.filter { $0.workoutId == nil }.map { $0.startedAt }
+        let allActivityDates = workouts.map { $0.workout.startedAt } + standaloneCardioDates
         let streakInfo = computeWeeklyStreak(dates: allActivityDates, now: now)
 
         let milestones: [Milestone] = [

@@ -28,6 +28,7 @@ final class ActiveCardioManager: ObservableObject {
         var hrMaxBpm: Int?
         var plannedSession: CardioPlanSession?
         var hasTriggeredGoalHaptic: Bool
+        var linkedWorkoutId: String?
     }
 
     @Published private(set) var sessionId: String? = nil
@@ -40,6 +41,9 @@ final class ActiveCardioManager: ObservableObject {
         didSet { persist() }
     }
     @Published var autoZoneEnabled: Bool = true {
+        didSet { persist() }
+    }
+    @Published var linkedWorkoutId: String? = nil {
         didSet { persist() }
     }
     @Published private(set) var isRunning: Bool = false
@@ -65,6 +69,8 @@ final class ActiveCardioManager: ObservableObject {
     private weak var cardioStore: CardioStore?
     private weak var heartRateReceiver: HeartRateReceiver?
     private weak var healthKitService: HealthKitService?
+    private weak var activeWorkoutManager: ActiveWorkoutManager?
+    private weak var historyStore: HistoryStore?
 
     var hasActiveSession: Bool {
         sessionId != nil
@@ -128,11 +134,15 @@ final class ActiveCardioManager: ObservableObject {
     func bind(
         cardioStore: CardioStore,
         heartRateReceiver: HeartRateReceiver,
-        healthKitService: HealthKitService
+        healthKitService: HealthKitService,
+        activeWorkoutManager: ActiveWorkoutManager? = nil,
+        historyStore: HistoryStore? = nil
     ) {
         self.cardioStore = cardioStore
         self.heartRateReceiver = heartRateReceiver
         self.healthKitService = healthKitService
+        self.activeWorkoutManager = activeWorkoutManager
+        self.historyStore = historyStore
 
         cancellables.removeAll()
 
@@ -151,7 +161,11 @@ final class ActiveCardioManager: ObservableObject {
 
     // MARK: - Lifecycle
 
-    func start(plannedSession: CardioPlanSession? = nil, activityType: CardioActivityType? = nil) {
+    func start(
+        plannedSession: CardioPlanSession? = nil,
+        activityType: CardioActivityType? = nil,
+        linkedWorkoutId: String? = nil
+    ) {
         let now = Date()
         self.sessionId = UUID().uuidString
         self.plannedSession = plannedSession
@@ -169,6 +183,12 @@ final class ActiveCardioManager: ObservableObject {
         self.hrBpmSum = 0
         self.hrMaxBpm = nil
 
+        if let explicitId = linkedWorkoutId {
+            self.linkedWorkoutId = explicitId
+        } else {
+            self.linkedWorkoutId = resolveDefaultLinkedWorkoutId(now: now)
+        }
+
         if let bpm = heartRateReceiver?.currentBPM, autoZoneEnabled {
             let maxHR = cardioStore?.maxHeartRate ?? 190
             self.currentZone = HeartRateZone.clampedZone(for: bpm, maxHR: maxHR)
@@ -182,6 +202,19 @@ final class ActiveCardioManager: ObservableObject {
         self.isPresentingSheet = true
         startTickerIfNeeded()
         persist()
+    }
+
+    /// Automatically links a new cardio session to an active strength workout or one finished
+    /// earlier today (within the last 4 hours) so "Kraft + danach Cardio" becomes a single combined training.
+    private func resolveDefaultLinkedWorkoutId(now: Date) -> String? {
+        if let activeId = activeWorkoutManager?.activeWorkout?.id {
+            return activeId
+        }
+        guard let latest = historyStore?.completedWorkouts.first else { return nil }
+        let refDate = latest.workout.finishedAt ?? latest.workout.startedAt
+        let isSameDay = Calendar.current.isDate(refDate, inSameDayAs: now)
+        let isRecent = abs(now.timeIntervalSince(refDate)) <= 4 * 3600
+        return (isSameDay && isRecent) ? latest.id : nil
     }
 
     func togglePause() {
@@ -225,6 +258,7 @@ final class ActiveCardioManager: ObservableObject {
         let capturedZones = zoneSeconds
         let capturedAvgHR = avgRecordedHeartRate
         let capturedMaxHR = hrMaxBpm
+        let capturedLinkedWorkoutId = linkedWorkoutId
         let maxHR = cardioStore?.maxHeartRate ?? 190
 
         var sessionNotes: String? = nil
@@ -246,7 +280,8 @@ final class ActiveCardioManager: ObservableObject {
                 zone3Seconds: zones[.z3] ?? 0,
                 zone4Seconds: zones[.z4] ?? 0,
                 zone5Seconds: zones[.z5] ?? 0,
-                notes: sessionNotes
+                notes: sessionNotes,
+                workoutId: capturedLinkedWorkoutId
             )
             self?.cardioStore?.save(session)
         }
@@ -364,6 +399,7 @@ final class ActiveCardioManager: ObservableObject {
         accumulatedPausedSeconds = 0
         elapsedSeconds = 0
         plannedSession = nil
+        linkedWorkoutId = nil
         hrSampleCount = 0
         hrBpmSum = 0
         hrMaxBpm = nil
@@ -395,7 +431,8 @@ final class ActiveCardioManager: ObservableObject {
             hrBpmSum: hrBpmSum,
             hrMaxBpm: hrMaxBpm,
             plannedSession: plannedSession,
-            hasTriggeredGoalHaptic: hasTriggeredGoalHaptic
+            hasTriggeredGoalHaptic: hasTriggeredGoalHaptic,
+            linkedWorkoutId: linkedWorkoutId
         )
         if let data = try? JSONEncoder().encode(state) {
             UserDefaults.standard.set(data, forKey: Self.persistenceKey)
@@ -434,6 +471,7 @@ final class ActiveCardioManager: ObservableObject {
         self.hrMaxBpm = state.hrMaxBpm
         self.plannedSession = state.plannedSession
         self.hasTriggeredGoalHaptic = state.hasTriggeredGoalHaptic
+        self.linkedWorkoutId = state.linkedWorkoutId
         catchUpWallClock(now: Date())
     }
 }

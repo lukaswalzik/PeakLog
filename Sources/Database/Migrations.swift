@@ -399,6 +399,17 @@ enum Migrations {
             try SeedData.insertDefaultExercises(in: db)
         }
 
+        migrator.registerMigration("v16_cardio_workout_link") { db in
+            try db.alter(table: "cardio_sessions") { t in
+                t.add(column: "workoutId", .text).references("workouts", onDelete: .setNull)
+            }
+            try db.create(
+                index: "idx_cardio_sessions_workoutId",
+                on: "cardio_sessions",
+                columns: ["workoutId"]
+            )
+        }
+
         return migrator
     }
 }

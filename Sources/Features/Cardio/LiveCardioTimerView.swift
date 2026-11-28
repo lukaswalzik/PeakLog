@@ -4,9 +4,35 @@ import UIKit
 struct LiveCardioTimerView: View {
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var activeCardioManager: ActiveCardioManager
+    @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+    @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
 
     @State private var isShowingDiscardAlert: Bool = false
+
+    private var linkableWorkouts: [(id: String, name: String, subtitle: String)] {
+        var items: [(id: String, name: String, subtitle: String)] = []
+        if let active = activeWorkoutManager.activeWorkout {
+            items.append((active.id, active.workout.name, "Gerade aktiv"))
+        }
+        for w in historyStore.completedWorkouts.prefix(8) {
+            if !items.contains(where: { $0.id == w.id }) {
+                items.append((w.id, w.workout.name, Formatters.shortDate(w.workout.startedAt)))
+            }
+        }
+        return items
+    }
+
+    private var linkedWorkoutLabel: String? {
+        guard let id = activeCardioManager.linkedWorkoutId else { return nil }
+        if let active = activeWorkoutManager.activeWorkout, active.id == id {
+            return "\(active.workout.name) (aktiv)"
+        }
+        if let match = historyStore.completedWorkouts.first(where: { $0.id == id }) {
+            return match.workout.name
+        }
+        return "Krafttraining"
+    }
 
     private var formattedTotalTime: String {
         let secs = activeCardioManager.elapsedSeconds
@@ -25,6 +51,10 @@ struct LiveCardioTimerView: View {
                 VStack(spacing: 18) {
                     if let planned = activeCardioManager.plannedSession {
                         plannedSessionBanner(planned)
+                    }
+
+                    if !linkableWorkouts.isEmpty {
+                        linkedWorkoutCard
                     }
 
                     Picker("Sportart", selection: $activeCardioManager.activityType) {
@@ -269,6 +299,69 @@ struct LiveCardioTimerView: View {
                 activeCardioManager.catchUpWallClock(now: Date())
             }
         }
+    }
+
+    private var linkedWorkoutCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: activeCardioManager.linkedWorkoutId != nil ? "link.circle.fill" : "link.circle")
+                .font(.title3)
+                .foregroundColor(activeCardioManager.linkedWorkoutId != nil ? .green : .secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                if let label = linkedWorkoutLabel {
+                    Text("Kombiniert mit: \(label)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                    Text("Wird als ein gemeinsames Training im Verlauf gespeichert")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Eigenständiges Cardio-Training")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Optional mit einem Krafttraining kombinieren")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            Menu {
+                Button {
+                    activeCardioManager.linkedWorkoutId = nil
+                } label: {
+                    if activeCardioManager.linkedWorkoutId == nil {
+                        Label("Eigenständiges Cardio", systemImage: "checkmark")
+                    } else {
+                        Text("Eigenständiges Cardio")
+                    }
+                }
+                Divider()
+                ForEach(linkableWorkouts, id: \.id) { item in
+                    Button {
+                        activeCardioManager.linkedWorkoutId = item.id
+                    } label: {
+                        if activeCardioManager.linkedWorkoutId == item.id {
+                            Label("\(item.name) · \(item.subtitle)", systemImage: "checkmark")
+                        } else {
+                            Text("\(item.name) · \(item.subtitle)")
+                        }
+                    }
+                }
+            } label: {
+                Text("Ändern")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.accentColor.opacity(0.14))
+                    .foregroundColor(.accentColor)
+                    .clipShape(Capsule())
+            }
+        }
+        .strongCard(padding: 12)
     }
 
     private func plannedSessionBanner(_ planned: CardioPlanSession) -> some View {

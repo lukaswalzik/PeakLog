@@ -6,10 +6,23 @@ import UIKit
 
 struct SaunaOverviewView: View {
     @EnvironmentObject private var wellnessStore: WellnessStore
+    @EnvironmentObject private var themeManager: ThemeManager
 
-    @State private var isShowingLiveTimer: Bool = false
-    @State private var isShowingManualForm: Bool = false
-    @State private var editingSession: SaunaSession? = nil
+    private enum ActiveSaunaSheet: Identifiable {
+        case liveTimer
+        case manualForm
+        case edit(SaunaSession)
+
+        var id: String {
+            switch self {
+            case .liveTimer: return "live-timer"
+            case .manualForm: return "manual-form"
+            case .edit(let session): return "edit-\(session.id)"
+            }
+        }
+    }
+
+    @State private var activeSheet: ActiveSaunaSheet? = nil
     @State private var sessionToDelete: SaunaSession? = nil
 
     private struct WeeklySaunaBar: Identifiable {
@@ -67,28 +80,35 @@ struct SaunaOverviewView: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .sheet(isPresented: $isShowingLiveTimer) {
-            LiveSaunaTimerView { session, extraWaterMl in
-                wellnessStore.saveSaunaSession(session)
-                if extraWaterMl > 0 {
-                    wellnessStore.adjustTodayWater(deltaMl: extraWaterMl)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .liveTimer:
+                LiveSaunaTimerView { session, extraWaterMl in
+                    wellnessStore.saveSaunaSession(session)
+                    if extraWaterMl > 0 {
+                        wellnessStore.adjustTodayWater(deltaMl: extraWaterMl)
+                    }
                 }
-            }
-        }
-        .sheet(isPresented: $isShowingManualForm) {
-            SaunaSessionFormView { session, extraWaterMl in
-                wellnessStore.saveSaunaSession(session)
-                if extraWaterMl > 0 {
-                    wellnessStore.adjustTodayWater(deltaMl: extraWaterMl)
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
+            case .manualForm:
+                SaunaSessionFormView { session, extraWaterMl in
+                    wellnessStore.saveSaunaSession(session)
+                    if extraWaterMl > 0 {
+                        wellnessStore.adjustTodayWater(deltaMl: extraWaterMl)
+                    }
                 }
-            }
-        }
-        .sheet(item: $editingSession) { session in
-            SaunaSessionFormView(existingSession: session) { updated, extraWaterMl in
-                wellnessStore.saveSaunaSession(updated)
-                if extraWaterMl > 0 {
-                    wellnessStore.adjustTodayWater(deltaMl: extraWaterMl)
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
+            case .edit(let session):
+                SaunaSessionFormView(existingSession: session) { updated, extraWaterMl in
+                    wellnessStore.saveSaunaSession(updated)
+                    if extraWaterMl > 0 {
+                        wellnessStore.adjustTodayWater(deltaMl: extraWaterMl)
+                    }
                 }
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
             }
         }
         .alert(
@@ -114,7 +134,7 @@ struct SaunaOverviewView: View {
     private var quickActionsRow: some View {
         HStack(spacing: 10) {
             Button {
-                isShowingLiveTimer = true
+                activeSheet = .liveTimer
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "flame.fill")
@@ -129,7 +149,7 @@ struct SaunaOverviewView: View {
             .tint(.orange)
 
             Button {
-                isShowingManualForm = true
+                activeSheet = .manualForm
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus.circle.fill")
@@ -280,7 +300,7 @@ struct SaunaOverviewView: View {
 
                 Menu {
                     Button {
-                        editingSession = session
+                        activeSheet = .edit(session)
                     } label: {
                         Label("Bearbeiten", systemImage: "pencil")
                     }
@@ -341,7 +361,7 @@ struct SaunaOverviewView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .strongCard()
         .onTapGesture {
-            editingSession = session
+            activeSheet = .edit(session)
         }
     }
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct CardioFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var historyStore: HistoryStore
 
     let existingSession: CardioSession?
     let onSave: (CardioSession) -> Void
@@ -20,17 +21,19 @@ struct CardioFormView: View {
     @State private var z4Minutes: Int
     @State private var z5Minutes: Int
     @State private var notes: String
+    @State private var selectedWorkoutId: String?
 
     init(
         existingSession: CardioSession? = nil,
         prefilledSession: CardioSession? = nil,
+        defaultWorkoutId: String? = nil,
         onSave: @escaping (CardioSession) -> Void
     ) {
         self.existingSession = existingSession
         self.onSave = onSave
 
         let source = existingSession ?? prefilledSession
-        _activityType = State(initialValue: source?.activityType ?? .running)
+        _activityType = State(initialValue: source?.activityType ?? .walking)
         _startedAt = State(initialValue: source?.startedAt ?? Date())
         _durationMinutes = State(initialValue: max(1, Int(round(Double(source?.durationSeconds ?? 1800) / 60.0))))
         _distanceText = State(initialValue: source?.distanceKm.map { Formatters.weight($0) } ?? "")
@@ -43,10 +46,15 @@ struct CardioFormView: View {
         _z4Minutes = State(initialValue: Int(round(Double(source?.zone4Seconds ?? 0) / 60.0)))
         _z5Minutes = State(initialValue: Int(round(Double(source?.zone5Seconds ?? 0) / 60.0)))
         _notes = State(initialValue: source?.notes ?? "")
+        _selectedWorkoutId = State(initialValue: existingSession?.workoutId ?? defaultWorkoutId)
     }
 
     private var totalZoneMinutes: Int {
         z1Minutes + z2Minutes + z3Minutes + z4Minutes + z5Minutes
+    }
+
+    private var recentLinkableWorkouts: [WorkoutDetail] {
+        Array(historyStore.completedWorkouts.prefix(20))
     }
 
     var body: some View {
@@ -67,6 +75,21 @@ struct CardioFormView: View {
                             Spacer()
                             Text("\(durationMinutes) min")
                                 .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                if !recentLinkableWorkouts.isEmpty {
+                    Section(
+                        header: Text("Mit Krafttraining kombinieren (optional)"),
+                        footer: Text("Verknüpftes Cardio erscheint direkt innerhalb des Krafttrainings im Verlauf statt als zweites Training.")
+                    ) {
+                        Picker("Training", selection: $selectedWorkoutId) {
+                            Text("Eigenständiges Cardio-Training").tag(Optional<String>.none)
+                            ForEach(recentLinkableWorkouts) { w in
+                                Text("\(w.workout.name) · \(Formatters.shortDate(w.workout.startedAt))")
+                                    .tag(Optional(w.id))
+                            }
                         }
                     }
                 }
@@ -206,7 +229,8 @@ struct CardioFormView: View {
             zone3Seconds: z3Minutes * 60,
             zone4Seconds: z4Minutes * 60,
             zone5Seconds: z5Minutes * 60,
-            notes: trimmedNotes.isEmpty ? nil : trimmedNotes
+            notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
+            workoutId: selectedWorkoutId
         )
         onSave(session)
         dismiss()

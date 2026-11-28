@@ -3,7 +3,8 @@ import SwiftUI
 
 struct CardioOverviewView: View {
     @EnvironmentObject private var cardioStore: CardioStore
-    @EnvironmentObject private var activeCardioManager: ActiveCardioManager
+    @EnvironmentObject private var historyStore: HistoryStore
+    @EnvironmentObject private var themeManager: ThemeManager
 
     enum RangeFilter: String, CaseIterable, Identifiable {
         case days7 = "7T"
@@ -21,9 +22,21 @@ struct CardioOverviewView: View {
         }
     }
 
+    private enum ActiveFormSheet: Identifiable {
+        case create
+        case edit(CardioSession)
+
+        var id: String {
+            switch self {
+            case .create: return "create"
+            case .edit(let session): return "edit-\(session.id)"
+            }
+        }
+    }
+
     @State private var selectedRange: RangeFilter = .days30
-    @State private var isShowingManualForm: Bool = false
-    @State private var editingSession: CardioSession? = nil
+    @State private var showCombinedSessions: Bool = false
+    @State private var activeFormSheet: ActiveFormSheet? = nil
     @State private var sessionToDelete: CardioSession? = nil
 
     private var zoneTotals: [(zone: HeartRateZone, seconds: Int)] {
@@ -34,31 +47,43 @@ struct CardioOverviewView: View {
         zoneTotals.reduce(0) { $0 + $1.seconds }
     }
 
+    private var displayedSessions: [CardioSession] {
+        showCombinedSessions ? cardioStore.sessions : cardioStore.standaloneSessions
+    }
+
+    private var linkedCount: Int {
+        cardioStore.linkedSessions.count
+    }
+
+    private func linkedWorkoutName(for workoutId: String?) -> String? {
+        guard let id = workoutId else { return nil }
+        return historyStore.completedWorkouts.first(where: { $0.id == id })?.workout.name
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                quickActionsRow
-                CardioPlansSectionView { planned in
-                    if activeCardioManager.hasActiveSession {
-                        activeCardioManager.isPresentingSheet = true
-                    } else {
-                        activeCardioManager.start(plannedSession: planned)
-                    }
-                }
+                addCompletedCardioBar
                 zonesChartCard
                 sessionsSection
             }
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .sheet(isPresented: $isShowingManualForm) {
-            CardioFormView { session in
-                cardioStore.save(session)
-            }
-        }
-        .sheet(item: $editingSession) { session in
-            CardioFormView(existingSession: session) { updated in
-                cardioStore.save(updated)
+        .sheet(item: $activeFormSheet) { sheet in
+            switch sheet {
+            case .create:
+                CardioFormView { session in
+                    cardioStore.save(session)
+                }
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
+            case .edit(let session):
+                CardioFormView(existingSession: session) { updated in
+                    cardioStore.save(updated)
+                }
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
             }
         }
         .alert(
@@ -81,40 +106,24 @@ struct CardioOverviewView: View {
         }
     }
 
-    private var quickActionsRow: some View {
-        HStack(spacing: 10) {
-            Button {
-                if activeCardioManager.hasActiveSession {
-                    activeCardioManager.isPresentingSheet = true
-                } else {
-                    activeCardioManager.start()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "stopwatch.fill")
-                    Text(activeCardioManager.hasActiveSession ? "Cardio öffnen" : "Live-Timer")
-                }
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+    private var addCompletedCardioBar: some View {
+        Button {
+            activeFormSheet = .create
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.subheadline)
+                Text("Abgeschlossenes Cardio eintragen")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
             }
-            .buttonStyle(.borderedProminent)
-
-            Button {
-                isShowingManualForm = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Eintragen")
-                }
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.bordered)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color.accentColor.opacity(0.14))
+            .foregroundColor(.accentColor)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .buttonStyle(.plain)
     }
 
     private var zonesChartCard: some View {
@@ -191,89 +200,171 @@ struct CardioOverviewView: View {
 
     private var sessionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Cardio-Einheiten (\(cardioStore.sessions.count))")
-                .font(.headline)
-                .padding(.horizontal, 4)
+            HStack {
+                Text("Abgeschlossene Einheiten (\(displayedSessions.count))")
+                    .font(.headline)
 
-            if cardioStore.sessions.isEmpty {
-                EmptyStateView(
-                    systemImage: "heart.text.square",
-                    title: "Noch keine Cardio-Einheiten",
-                    message: "Starte den Live-Timer oder trage eine Einheit manuell ein."
-                )
-            } else {
-                ForEach(cardioStore.sessions) { session in
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 12) {
-                            Image(systemName: session.activityType.systemImage)
-                                .font(.title3)
-                                .foregroundColor(session.activityType.accentColor)
-                                .frame(width: 42, height: 42)
-                                .background(session.activityType.accentColor.opacity(0.14))
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Spacer()
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(session.activityType.displayName)
-                                    .font(.headline)
-                                Text(Formatters.workoutDate(session.startedAt))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            Spacer()
-
-                            Menu {
-                                Button {
-                                    editingSession = session
-                                } label: {
-                                    Label("Bearbeiten", systemImage: "pencil")
-                                }
-                                Button(role: .destructive) {
-                                    sessionToDelete = session
-                                } label: {
-                                    Label("Löschen", systemImage: "trash")
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .font(.title3)
-                                    .foregroundColor(.secondary)
-                            }
+                if linkedCount > 0 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showCombinedSessions.toggle()
                         }
-
-                        HStack(spacing: 12) {
-                            Label("\(session.durationSeconds / 60) min", systemImage: "clock")
-                            if let dist = session.distanceKm {
-                                Label("\(Formatters.weight(dist)) km", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                            }
-                            if let avg = session.avgHeartRate {
-                                Label("Ø \(avg) bpm", systemImage: "heart.fill")
-                                    .foregroundColor(.red)
-                            }
-                            if let kcal = session.calories {
-                                Label("\(kcal) kcal", systemImage: "flame.fill")
-                                    .foregroundColor(.orange)
-                            }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showCombinedSessions ? "link.circle.fill" : "link.circle")
+                                .font(.caption2)
+                            Text(showCombinedSessions ? "Alle inkl. Kombi" : "+\(linkedCount) im Kraft-Verlauf")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
                         }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                        if session.totalZoneSeconds > 0 {
-                            HeartRateZoneBarView(session: session, height: 10)
-                        }
-
-                        if let notes = session.notes, !notes.isEmpty {
-                            Text(notes)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(showCombinedSessions ? Color.accentColor.opacity(0.16) : Color(uiColor: .secondarySystemGroupedBackground))
+                        .foregroundColor(showCombinedSessions ? .accentColor : .secondary)
+                        .clipShape(Capsule())
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .strongCard()
-                    .onTapGesture {
-                        editingSession = session
-                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 4)
+
+            if displayedSessions.isEmpty {
+                if linkedCount > 0 && !showCombinedSessions {
+                    VStack(spacing: 10) {
+                        EmptyStateView(
+                            systemImage: "link.circle",
+                            title: "Keine eigenständigen Cardio-Einheiten",
+                            message: "Du hast \(linkedCount) Cardio-\(linkedCount == 1 ? "Einheit" : "Einheiten"), die direkt in deinen Krafttrainings gespeichert sind."
+                        )
+                        Button("Kombinierte Cardio-Einheiten anzeigen") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showCombinedSessions = true
+                            }
+                        }
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .buttonStyle(.bordered)
+                    }
+                } else {
+                    EmptyStateView(
+                        systemImage: "heart.text.square",
+                        title: "Noch keine Cardio-Einheiten",
+                        message: "Starte Cardio über den Start-Tab oder trage hier eine abgeschlossene Einheit manuell ein."
+                    )
+                }
+            } else {
+                ForEach(displayedSessions) { session in
+                    cardioSessionCard(session)
+                }
+            }
+        }
+    }
+
+    private func cardioSessionCard(_ session: CardioSession) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: session.activityType.systemImage)
+                    .font(.title3)
+                    .foregroundColor(session.activityType.accentColor)
+                    .frame(width: 42, height: 42)
+                    .background(session.activityType.accentColor.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.activityType.displayName)
+                        .font(.headline)
+                    Text(Formatters.workoutDate(session.startedAt))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Menu {
+                    Button {
+                        activeFormSheet = .edit(session)
+                    } label: {
+                        Label("Bearbeiten", systemImage: "pencil")
+                    }
+                    if session.workoutId != nil {
+                        Button {
+                            cardioStore.linkSession(session, toWorkoutId: nil)
+                        } label: {
+                            Label("Vom Krafttraining trennen", systemImage: "link.badge.minus")
+                        }
+                    }
+                    Button(role: .destructive) {
+                        sessionToDelete = session
+                    } label: {
+                        Label("Löschen", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let workoutName = linkedWorkoutName(for: session.workoutId) {
+                HStack(spacing: 5) {
+                    Image(systemName: "link")
+                        .font(.caption2)
+                    Text("Kombiniert mit: \(workoutName)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.green.opacity(0.14))
+                .foregroundColor(.green)
+                .clipShape(Capsule())
+            }
+
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                    Text("\(max(1, session.durationSeconds / 60)) min")
+                }
+                if let dist = session.distanceKm {
+                    HStack(spacing: 4) {
+                        Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                        Text("\(Formatters.weight(dist)) km")
+                    }
+                }
+                if let avg = session.avgHeartRate {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                        Text("Ø \(avg) bpm")
+                    }
+                    .foregroundColor(.red)
+                }
+                if let kcal = session.calories {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                        Text("\(kcal) kcal")
+                    }
+                    .foregroundColor(.orange)
+                }
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+            if session.totalZoneSeconds > 0 {
+                HeartRateZoneBarView(session: session, height: 10)
+            }
+
+            if let notes = session.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .strongCard()
+        .onTapGesture {
+            activeFormSheet = .edit(session)
         }
     }
 }

@@ -61,6 +61,7 @@
 - **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt zusätzlich lokale UDP-Pakete (IPv4/IPv6, UTF-8 ASCII-BPM `30–240`, ca. 1×/Sekunde) inkl. integriertem Selbsttest & Roh-Diagnose.
 - **Im Kraft-Workout:** Live-Puls in Toolbar, Banner, Dynamic Island und eigener Live-HF-Karte mit aktueller HF-Zone, Ø-/Max-Puls und Echtzeit-Sparkline; alle Messpunkte werden automatisch gespeichert und im Trainingsverlauf als **Swift-Charts-Kurve** mit HF-Zonen-Verteilung visualisiert.
 - **Minimierbarer Live-Cardio-Timer & Hintergrund-Tracking:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische **Auto-Zonen-Umschaltung** per Live-Puls, minimierbares Floating-Banner innerhalb der App sowie exaktes Wall-Clock-Zeittracking + HealthKit-HF-Backfill beim Minimieren der App oder Sperren des iPhones – inkl. Live-Puls & Timer in der **Dynamic Island**.
+- **Kombinierte Kraft- & Cardio-Trainings:** Krafttraining + anschließendes Cardio lassen sich direkt als **ein gemeinsames Training** speichern (automatische Verknüpfung nach dem Krafttraining, 1-Tap im Workout-Recap oder nachträglich im Trainingsdetail) – im Verlauf erscheinen dann Kraft und Cardio vereint in einer Detailansicht ohne Doppelzählung.
 - **Cardio-Trainingspläne:** Eigene Cardio-Pläne erstellen, bearbeiten & duplizieren (inkl. vorinstalliertem gelenkschonendem **Zone-2 Grundfitness-Starterplan** für Laufband-Incline-Walk & Ergometer), Wochenziel-Fortschritt, 1-Tap-Start direkt in den Live-Timer mit Zielzeit-Balken & Echtzeit-Zielzonen-Coaching („Im Zielbereich“ / „Etwas zügiger“ / „Etwas ruhiger“).
 
 ### Ernährung, Wasser & Supplements
@@ -129,14 +130,14 @@ open StrongTracker.xcodeproj
 - **Widgets, Live Activities & Dynamic Island:** `WidgetKit` + `ActivityKit` Extension (`LiveActivityExtension/`) mit App-Group-Sync (`group.com.local.strongtracker`)
 - **Health & Sensorik:** `HealthKit` (`HKAnchoredObjectQuery`, `HKObserverQuery` + Background Delivery, `HKWorkoutBuilder`) & `Darwin` Dual-Stack UDP Socket (`DispatchSourceRead`)
 - **Diagramme:** Swift Charts
-- **Persistenz:** [GRDB.swift](https://github.com/groue/GRDB.swift) (SQLite mit versionierten Migrationen `v1`–`v15`)
+- **Persistenz:** [GRDB.swift](https://github.com/groue/GRDB.swift) (SQLite mit versionierten Migrationen `v1`–`v16`)
 - **Projektverwaltung:** [XcodeGen](https://github.com/yonaskolb/XcodeGen) ([`project.yml`](project.yml)) – keine `.xcodeproj`-Dateien im Repository
 - **CI/CD:** GitHub Actions ([`.github/workflows/build-ipa.yml`](.github/workflows/build-ipa.yml)) baut bei jedem Push auf `main` automatisch `PeakLog.ipa`
 
 ```text
 Sources/
 ├── App/                  # StrongTrackerApp, RootTabView, ActiveWorkoutBanner & ActiveCardioBanner
-├── Database/             # AppDatabase, Migrations (v1–v15), SeedData (100 Übungen), SeedFoods
+├── Database/             # AppDatabase, Migrations (v1–v16), SeedData (100 Übungen), SeedFoods
 ├── Models/               # Workout, HeartRateSample, CardioSession, CardioPlan, Nutrition, Wellness, BackupPayload
 ├── Services/             # ActiveWorkoutManager, ActiveCardioManager, HealthKitService, HeartRateReceiver, WorkoutLiveActivityManager, WidgetDataSyncManager, ThemeManager, StrongCSVImportService, MistralAI, Oura, Backup
 ├── Shared/               # Theme, Formatters, 1RM-Rechner, WorkoutActivityAttributes, PeakLogWidgetSnapshot, Komponenten

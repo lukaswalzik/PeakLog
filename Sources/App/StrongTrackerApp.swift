@@ -56,7 +56,9 @@ struct StrongTrackerApp: App {
         cardioManager.bind(
             cardioStore: cStore,
             heartRateReceiver: hrReceiver,
-            healthKitService: hkService
+            healthKitService: hkService,
+            activeWorkoutManager: workoutManager,
+            historyStore: hStore
         )
 
         let activityManager = WorkoutLiveActivityManager()

@@ -78,6 +78,30 @@ final class CardioStore: ObservableObject {
         }
     }
 
+    var standaloneSessions: [CardioSession] {
+        sessions.filter { $0.workoutId == nil }
+    }
+
+    var linkedSessions: [CardioSession] {
+        sessions.filter { $0.workoutId != nil }
+    }
+
+    func sessions(forWorkoutId workoutId: String) -> [CardioSession] {
+        sessions
+            .filter { $0.workoutId == workoutId }
+            .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    func linkSession(_ session: CardioSession, toWorkoutId workoutId: String?) {
+        var updated = session
+        updated.workoutId = workoutId
+        do {
+            try database.saveCardioSession(updated)
+        } catch {
+            errorMessage = "Cardio-Verknüpfung konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Cardio Plans Persistence & CRUD
 
     private static func loadPlans() -> [CardioPlan] {
