@@ -6,14 +6,16 @@ struct LiveCardioTimerView: View {
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
 
+    let plannedSession: CardioPlanSession?
     let onFinish: (CardioSession) -> Void
 
-    @State private var activityType: CardioActivityType = .running
-    @State private var currentZone: HeartRateZone = .z2
+    @State private var activityType: CardioActivityType
+    @State private var currentZone: HeartRateZone
     @State private var autoZoneEnabled: Bool = true
     @State private var isRunning: Bool = true
     @State private var startedAt: Date = Date()
     @State private var elapsedSeconds: Int = 0
+    @State private var hasTriggeredGoalHaptic: Bool = false
     @State private var zoneSeconds: [HeartRateZone: Int] = [
         .z1: 0, .z2: 0, .z3: 0, .z4: 0, .z5: 0
     ]
@@ -21,6 +23,16 @@ struct LiveCardioTimerView: View {
     @State private var hrBpmSum: Int = 0
     @State private var hrMaxBpm: Int? = nil
     @State private var ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    init(
+        plannedSession: CardioPlanSession? = nil,
+        onFinish: @escaping (CardioSession) -> Void
+    ) {
+        self.plannedSession = plannedSession
+        self.onFinish = onFinish
+        _activityType = State(initialValue: plannedSession?.activityType ?? .walking)
+        _currentZone = State(initialValue: plannedSession?.targetZone ?? .z2)
+    }
 
     private var isAutoZoneActive: Bool {
         autoZoneEnabled && heartRateReceiver.hasLiveSignal
@@ -45,6 +57,10 @@ struct LiveCardioTimerView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
+                    if let planned = plannedSession {
+                        plannedSessionBanner(planned)
+                    }
+
                     Picker("Sportart", selection: $activityType) {
                         ForEach(CardioActivityType.allCases) { type in
                             Text(type.displayName).tag(type)
@@ -246,6 +262,12 @@ struct LiveCardioTimerView: View {
                 guard isRunning else { return }
                 elapsedSeconds += 1
                 zoneSeconds[currentZone, default: 0] += 1
+                if let targetMins = plannedSession?.targetDurationMinutes,
+                   !hasTriggeredGoalHaptic,
+                   elapsedSeconds >= targetMins * 60 {
+                    hasTriggeredGoalHaptic = true
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
             }
             .onReceive(heartRateReceiver.sampleSubject) { reading in
                 guard isRunning else { return }
@@ -259,6 +281,84 @@ struct LiveCardioTimerView: View {
         }
     }
 
+    private func plannedSessionBanner(_ planned: CardioPlanSession) -> some View {
+        let targetSeconds = max(60, planned.targetDurationMinutes * 60)
+        let progress = min(1.0, Double(elapsedSeconds) / Double(targetSeconds))
+        let reachedGoal = elapsedSeconds >= targetSeconds
+        let targetBounds = planned.targetZone.percentBounds
+        let lowerBPM = Int(round(Double(cardioStore.maxHeartRate) * targetBounds.0))
+        let upperBPM = Int(round(Double(cardioStore.maxHeartRate) * targetBounds.1))
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(planned.title)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    if !planned.intensityGuide.isEmpty {
+                        Text(planned.intensityGuide)
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                            .fontWeight(.semibold)
+                    }
+                }
+                Spacer()
+                if reachedGoal {
+                    Label("Ziel erreicht!", systemImage: "checkmark.seal.fill")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.18))
+                        .foregroundColor(.green)
+                        .clipShape(Capsule())
+                } else {
+                    Text("Ziel: \(planned.targetDurationMinutes) Min")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .monospacedDigit()
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            ProgressView(value: progress)
+                .progressViewStyle(.linear)
+                .tint(reachedGoal ? .green : planned.targetZone.color)
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(planned.targetZone.color)
+                    .frame(width: 8, height: 8)
+                Text("Zielzone: \(planned.targetZone.shortName) (\(lowerBPM)–\(upperBPM) bpm)")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                if let bpm = heartRateReceiver.currentBPM {
+                    if bpm >= lowerBPM && bpm <= upperBPM {
+                        Text("Im Zielbereich")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    } else if bpm < lowerBPM {
+                        Text("Etwas zügiger")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    } else {
+                        Text("Etwas ruhiger")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.orange)
+                    }
+                }
+            }
+        }
+        .strongCard(padding: 12)
+    }
+
     private func formatZoneTime(_ seconds: Int) -> String {
         let mins = seconds / 60
         let secs = seconds % 60
@@ -266,6 +366,15 @@ struct LiveCardioTimerView: View {
     }
 
     private func finishSession() {
+        var sessionNotes: String? = nil
+        if let planned = plannedSession {
+            if planned.intensityGuide.isEmpty {
+                sessionNotes = planned.title
+            } else {
+                sessionNotes = "\(planned.title) · \(planned.intensityGuide)"
+            }
+        }
+
         let session = CardioSession(
             activityType: activityType,
             startedAt: startedAt,
@@ -276,7 +385,8 @@ struct LiveCardioTimerView: View {
             zone2Seconds: zoneSeconds[.z2] ?? 0,
             zone3Seconds: zoneSeconds[.z3] ?? 0,
             zone4Seconds: zoneSeconds[.z4] ?? 0,
-            zone5Seconds: zoneSeconds[.z5] ?? 0
+            zone5Seconds: zoneSeconds[.z5] ?? 0,
+            notes: sessionNotes
         )
         onFinish(session)
         dismiss()

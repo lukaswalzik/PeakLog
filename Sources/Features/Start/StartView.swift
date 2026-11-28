@@ -15,6 +15,7 @@ struct StartView: View {
     @State private var isShowingAlreadyActiveAlert: Bool = false
     @State private var isShowingCardioForm: Bool = false
     @State private var isShowingLiveCardio: Bool = false
+    @State private var plannedCardioToStart: CardioPlanSession? = nil
     @State private var isShowingManageGyms: Bool = false
 
     private var progressSummary: UserProgressSummary {
@@ -106,9 +107,24 @@ struct StartView: View {
                         }
                     }
                 }
+
+                Section(
+                    header: Text("Mein Cardio-Plan")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                ) {
+                    CardioPlansSectionView(
+                        onStartSession: { planned in
+                            plannedCardioToStart = planned
+                        },
+                        compactForStartTab: true
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowBackground(Color.clear)
+                }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("StrongTracker")
+            .navigationTitle("PeakLog")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if routineStore.routines.count > 1 {
@@ -145,6 +161,11 @@ struct StartView: View {
             }
             .sheet(isPresented: $isShowingLiveCardio) {
                 LiveCardioTimerView { session in
+                    cardioStore.save(session)
+                }
+            }
+            .sheet(item: $plannedCardioToStart) { planned in
+                LiveCardioTimerView(plannedSession: planned) { session in
                     cardioStore.save(session)
                 }
             }

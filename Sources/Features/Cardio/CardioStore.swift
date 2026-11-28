@@ -3,8 +3,10 @@ import GRDB
 
 final class CardioStore: ObservableObject {
     private static let maxHRDefaultsKey = "strongtracker.cardio.max_heart_rate"
+    private static let plansDefaultsKey = "strongtracker.cardio.plans.v1"
 
     @Published private(set) var sessions: [CardioSession] = []
+    @Published private(set) var plans: [CardioPlan] = []
     @Published var errorMessage: String?
 
     @Published var maxHeartRate: Int {
@@ -23,7 +25,35 @@ final class CardioStore: ObservableObject {
         self.database = database
         let stored = UserDefaults.standard.integer(forKey: Self.maxHRDefaultsKey)
         self.maxHeartRate = (120...220).contains(stored) ? stored : 190
+        self.plans = Self.loadPlans()
         startObservation()
+    }
+
+    var activePlan: CardioPlan? {
+        plans.first(where: { $0.isActive }) ?? plans.first
+    }
+
+    var sessionsThisWeek: [CardioSession] {
+        var isoCal = Calendar(identifier: .iso8601)
+        isoCal.timeZone = .current
+        let now = Date()
+        let comps = isoCal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+        guard let startOfWeek = isoCal.date(from: comps) else { return [] }
+        return sessions.filter { $0.startedAt >= startOfWeek }
+    }
+
+    var minutesThisWeek: Int {
+        sessionsThisWeek.reduce(0) { $0 + $1.durationSeconds } / 60
+    }
+
+    func hasCompletedPlannedSessionThisWeek(_ planned: CardioPlanSession) -> Bool {
+        let lowerTitle = planned.title.lowercased()
+        return sessionsThisWeek.contains { session in
+            if let notes = session.notes?.lowercased(), notes.contains(lowerTitle) {
+                return true
+            }
+            return false
+        }
     }
 
     var totalSessionsCount: Int {
@@ -45,6 +75,96 @@ final class CardioStore: ObservableObject {
         return HeartRateZone.allCases.map { zone in
             let sum = relevant.reduce(0) { $0 + $1.seconds(for: zone) }
             return (zone, sum)
+        }
+    }
+
+    // MARK: - Cardio Plans Persistence & CRUD
+
+    private static func loadPlans() -> [CardioPlan] {
+        if let data = UserDefaults.standard.data(forKey: plansDefaultsKey),
+           let decoded = try? JSONDecoder().decode([CardioPlan].self, from: data),
+           !decoded.isEmpty {
+            return decoded
+        }
+        let starter = [CardioPlan.defaultStarterPlan()]
+        if let encoded = try? JSONEncoder().encode(starter) {
+            UserDefaults.standard.set(encoded, forKey: plansDefaultsKey)
+        }
+        return starter
+    }
+
+    private func persistPlans() {
+        if let encoded = try? JSONEncoder().encode(plans) {
+            UserDefaults.standard.set(encoded, forKey: Self.plansDefaultsKey)
+        }
+    }
+
+    func savePlan(_ plan: CardioPlan) {
+        var normalized = plan
+        normalized.updatedAt = Date()
+        normalized.sessions = plan.sessions.enumerated().map { idx, item in
+            var copy = item
+            copy.sortOrder = idx
+            return copy
+        }
+
+        if let existingIdx = plans.firstIndex(where: { $0.id == normalized.id }) {
+            plans[existingIdx] = normalized
+        } else {
+            if plans.isEmpty {
+                normalized.isActive = true
+            }
+            plans.append(normalized)
+        }
+
+        if normalized.isActive {
+            for idx in plans.indices {
+                plans[idx].isActive = (plans[idx].id == normalized.id)
+            }
+        } else if !plans.contains(where: { $0.isActive }), !plans.isEmpty {
+            plans[0].isActive = true
+        }
+        persistPlans()
+    }
+
+    func setActivePlan(id: String) {
+        for idx in plans.indices {
+            plans[idx].isActive = (plans[idx].id == id)
+        }
+        persistPlans()
+    }
+
+    func deletePlan(id: String) {
+        plans.removeAll { $0.id == id }
+        if !plans.contains(where: { $0.isActive }), !plans.isEmpty {
+            plans[0].isActive = true
+        }
+        persistPlans()
+    }
+
+    func duplicatePlan(_ plan: CardioPlan) {
+        var copy = plan
+        copy.id = UUID().uuidString
+        copy.name = "\(plan.name) (Kopie)"
+        copy.isActive = true
+        copy.createdAt = Date()
+        copy.updatedAt = Date()
+        copy.sessions = plan.sessions.map { s in
+            var sCopy = s
+            sCopy.id = UUID().uuidString
+            return sCopy
+        }
+        savePlan(copy)
+    }
+
+    func restoreDefaultStarterPlan() {
+        var starter = CardioPlan.defaultStarterPlan()
+        starter.isActive = true
+        if let idx = plans.firstIndex(where: { $0.id == starter.id }) {
+            plans[idx] = starter
+            setActivePlan(id: starter.id)
+        } else {
+            savePlan(starter)
         }
     }
 

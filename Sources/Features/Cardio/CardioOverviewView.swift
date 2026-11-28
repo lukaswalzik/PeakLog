@@ -23,6 +23,7 @@ struct CardioOverviewView: View {
     @State private var selectedRange: RangeFilter = .days30
     @State private var isShowingManualForm: Bool = false
     @State private var isShowingLiveTimer: Bool = false
+    @State private var plannedSessionToStart: CardioPlanSession? = nil
     @State private var editingSession: CardioSession? = nil
     @State private var sessionToDelete: CardioSession? = nil
 
@@ -38,6 +39,9 @@ struct CardioOverviewView: View {
         ScrollView {
             VStack(spacing: 16) {
                 quickActionsRow
+                CardioPlansSectionView { planned in
+                    plannedSessionToStart = planned
+                }
                 zonesChartCard
                 sessionsSection
             }
@@ -51,6 +55,11 @@ struct CardioOverviewView: View {
         }
         .sheet(isPresented: $isShowingLiveTimer) {
             LiveCardioTimerView { session in
+                cardioStore.save(session)
+            }
+        }
+        .sheet(item: $plannedSessionToStart) { planned in
+            LiveCardioTimerView(plannedSession: planned) { session in
                 cardioStore.save(session)
             }
         }

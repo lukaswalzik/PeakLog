@@ -61,6 +61,7 @@
 - **Lokaler Live-HF-Empfänger (`127.0.0.1:49153`):** Empfängt zusätzlich lokale UDP-Pakete (IPv4/IPv6, UTF-8 ASCII-BPM `30–240`, ca. 1×/Sekunde) inkl. integriertem Selbsttest & Roh-Diagnose.
 - **Im Kraft-Workout:** Live-Puls in Toolbar, Banner, Dynamic Island und eigener Live-HF-Karte mit aktueller HF-Zone, Ø-/Max-Puls und Echtzeit-Sparkline; alle Messpunkte werden automatisch gespeichert und im Trainingsverlauf als **Swift-Charts-Kurve** mit HF-Zonen-Verteilung visualisiert.
 - **Cardio & Live-Cardio-Timer:** 10 Sportarten, 5 Herzfrequenzzonen (`Z1–Z5`), automatische **Auto-Zonen-Umschaltung** per Live-Puls sowie Speicherung von Ø- und Max-Herzfrequenz.
+- **Cardio-Trainingspläne:** Eigene Cardio-Pläne erstellen, bearbeiten & duplizieren (inkl. vorinstalliertem gelenkschonendem **Zone-2 Grundfitness-Starterplan** für Laufband-Incline-Walk & Ergometer), Wochenziel-Fortschritt, 1-Tap-Start direkt in den Live-Timer mit Zielzeit-Balken & Echtzeit-Zielzonen-Coaching („Im Zielbereich“ / „Etwas zügiger“ / „Etwas ruhiger“).
 
 ### Ernährung, Wasser & Supplements
 - **Makro- & Mikronährstoffe:** Kalorien, Protein, Kohlenhydrate, Fett sowie Ballaststoffe, Zucker, Salz, Vitamin C, Kalzium und Eisen.

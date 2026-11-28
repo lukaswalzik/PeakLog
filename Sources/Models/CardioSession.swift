@@ -62,7 +62,7 @@ enum CardioActivityType: String, CaseIterable, Codable, Identifiable, Hashable, 
     }
 }
 
-enum HeartRateZone: Int, CaseIterable, Identifiable, Hashable {
+enum HeartRateZone: Int, CaseIterable, Identifiable, Hashable, Codable {
     case z1 = 1
     case z2 = 2
     case z3 = 3
