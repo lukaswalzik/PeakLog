@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import SwiftUI
 
 struct DailyWaterLog: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "daily_water_logs"
@@ -189,5 +190,119 @@ enum DayKeyFormatter {
 
     static func string(from date: Date) -> String {
         formatter.string(from: date)
+    }
+}
+
+enum SaunaType: String, CaseIterable, Codable, Identifiable, Hashable, DatabaseValueConvertible {
+    case finnish
+    case bio
+    case steam
+    case infrared
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .finnish: return "Finnische Sauna"
+        case .bio: return "Bio-Sauna"
+        case .steam: return "Dampfbad"
+        case .infrared: return "Infrarotkabine"
+        }
+    }
+
+    var shortName: String {
+        switch self {
+        case .finnish: return "Finnisch"
+        case .bio: return "Bio-Sauna"
+        case .steam: return "Dampfbad"
+        case .infrared: return "Infrarot"
+        }
+    }
+
+    var defaultTemperatureCelsius: Int {
+        switch self {
+        case .finnish: return 90
+        case .bio: return 60
+        case .steam: return 48
+        case .infrared: return 55
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .finnish: return "flame.fill"
+        case .bio: return "leaf.fill"
+        case .steam: return "cloud.fog.fill"
+        case .infrared: return "sun.max.fill"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .finnish: return .orange
+        case .bio: return .green
+        case .steam: return .cyan
+        case .infrared: return .red
+        }
+    }
+}
+
+struct SaunaSession: Identifiable, Equatable, Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "sauna_sessions"
+
+    var id: String
+    var startedAt: Date
+    var saunaType: SaunaType
+    var temperatureCelsius: Int
+    var rounds: Int
+    var totalDurationMinutes: Int
+    var coldPlungeDone: Bool
+    var coldPlungeMinutes: Int
+    var avgHeartRate: Int?
+    var maxHeartRate: Int?
+    var feeling: Int
+    var notes: String?
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let startedAt = Column(CodingKeys.startedAt)
+        static let saunaType = Column(CodingKeys.saunaType)
+        static let temperatureCelsius = Column(CodingKeys.temperatureCelsius)
+        static let rounds = Column(CodingKeys.rounds)
+        static let totalDurationMinutes = Column(CodingKeys.totalDurationMinutes)
+        static let coldPlungeDone = Column(CodingKeys.coldPlungeDone)
+        static let coldPlungeMinutes = Column(CodingKeys.coldPlungeMinutes)
+        static let avgHeartRate = Column(CodingKeys.avgHeartRate)
+        static let maxHeartRate = Column(CodingKeys.maxHeartRate)
+        static let feeling = Column(CodingKeys.feeling)
+        static let notes = Column(CodingKeys.notes)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        startedAt: Date = Date(),
+        saunaType: SaunaType = .finnish,
+        temperatureCelsius: Int = 90,
+        rounds: Int = 3,
+        totalDurationMinutes: Int = 36,
+        coldPlungeDone: Bool = true,
+        coldPlungeMinutes: Int = 0,
+        avgHeartRate: Int? = nil,
+        maxHeartRate: Int? = nil,
+        feeling: Int = 4,
+        notes: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.saunaType = saunaType
+        self.temperatureCelsius = temperatureCelsius
+        self.rounds = max(1, rounds)
+        self.totalDurationMinutes = max(1, totalDurationMinutes)
+        self.coldPlungeDone = coldPlungeDone
+        self.coldPlungeMinutes = max(0, coldPlungeMinutes)
+        self.avgHeartRate = avgHeartRate
+        self.maxHeartRate = maxHeartRate
+        self.feeling = max(1, min(5, feeling))
+        self.notes = notes
     }
 }

@@ -1535,6 +1535,24 @@ extension AppDatabase {
             _ = try ReadinessLog.deleteOne(db, key: id)
         }
     }
+
+    static func fetchSaunaSessions(in db: Database) throws -> [SaunaSession] {
+        try SaunaSession
+            .order(SaunaSession.Columns.startedAt.desc)
+            .fetchAll(db)
+    }
+
+    func saveSaunaSession(_ session: SaunaSession) throws {
+        try dbWriter.write { db in
+            try session.save(db)
+        }
+    }
+
+    func deleteSaunaSession(id: String) throws {
+        try dbWriter.write { db in
+            _ = try SaunaSession.deleteOne(db, key: id)
+        }
+    }
 }
 
 // MARK: - Day Template Operations

@@ -8,6 +8,7 @@ struct HistoryListView: View {
     enum HistoryMode: String, CaseIterable, Identifiable {
         case strength = "Kraft"
         case cardio = "Cardio"
+        case sauna = "Sauna"
 
         var id: String { rawValue }
     }
@@ -52,8 +53,10 @@ struct HistoryListView: View {
                         gymFilterBar
                     }
                     strengthHistoryContent
-                } else {
+                } else if selectedMode == .cardio {
                     CardioOverviewView()
+                } else {
+                    SaunaOverviewView()
                 }
             }
             .navigationTitle("Verlauf")

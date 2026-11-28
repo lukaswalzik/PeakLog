@@ -415,6 +415,34 @@ struct ProfileBackupView: View {
                     }
 
                     NavigationLink {
+                        SaunaNavigationView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flame.fill")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+                                .frame(width: 40, height: 40)
+                                .background(Color.orange.opacity(0.16))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sauna & Kälte")
+                                    .font(.headline)
+                                if wellnessStore.saunaSessions.isEmpty {
+                                    Text("Saunagänge, Temperatur, Eisbad & Live-Timer")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Diese Woche: \(wellnessStore.saunaSessionsThisWeek.count)× (\(wellnessStore.saunaMinutesThisWeek) Min) · Gesamt \(wellnessStore.saunaSessions.count)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    NavigationLink {
                         GymsManagementView()
                     } label: {
                         HStack(spacing: 12) {

@@ -20,6 +20,7 @@ final class WellnessStore: ObservableObject {
     @Published private(set) var takenSupplementIds: Set<String> = []
     @Published private(set) var measurements: [BodyMeasurement] = []
     @Published private(set) var readinessLogs: [ReadinessLog] = []
+    @Published private(set) var saunaSessions: [SaunaSession] = []
     @Published var errorMessage: String?
 
     private let database: AppDatabase
@@ -42,6 +43,22 @@ final class WellnessStore: ObservableObject {
         measurements.first
     }
 
+    var saunaSessionsThisWeek: [SaunaSession] {
+        var isoCal = Calendar(identifier: .iso8601)
+        isoCal.timeZone = .current
+        let comps = isoCal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        guard let startOfWeek = isoCal.date(from: comps) else { return [] }
+        return saunaSessions.filter { $0.startedAt >= startOfWeek }
+    }
+
+    var saunaMinutesThisWeek: Int {
+        saunaSessionsThisWeek.reduce(0) { $0 + $1.totalDurationMinutes }
+    }
+
+    var totalSaunaMinutes: Int {
+        saunaSessions.reduce(0) { $0 + $1.totalDurationMinutes }
+    }
+
     func setSelectedDate(_ date: Date) {
         let key = DayKeyFormatter.string(from: date)
         if key != selectedDayKey {
@@ -50,11 +67,12 @@ final class WellnessStore: ObservableObject {
     }
 
     private func startGlobalObservation() {
-        let observation = ValueObservation.tracking { db -> ([Supplement], [BodyMeasurement], [ReadinessLog]) in
+        let observation = ValueObservation.tracking { db -> ([Supplement], [BodyMeasurement], [ReadinessLog], [SaunaSession]) in
             let supps = try AppDatabase.fetchSupplements(in: db)
             let meas = try AppDatabase.fetchBodyMeasurements(in: db)
             let read = try AppDatabase.fetchReadinessLogs(in: db)
-            return (supps, meas, read)
+            let sauna = try AppDatabase.fetchSaunaSessions(in: db)
+            return (supps, meas, read, sauna)
         }
 
         globalCancellable = observation.start(
@@ -63,10 +81,11 @@ final class WellnessStore: ObservableObject {
             onError: { [weak self] error in
                 self?.errorMessage = "Wellness-Daten konnten nicht geladen werden: \(error.localizedDescription)"
             },
-            onChange: { [weak self] supps, meas, read in
+            onChange: { [weak self] supps, meas, read, sauna in
                 self?.supplements = supps
                 self?.measurements = meas
                 self?.readinessLogs = read
+                self?.saunaSessions = sauna
             }
         )
     }
@@ -95,6 +114,15 @@ final class WellnessStore: ObservableObject {
     func adjustWater(deltaMl: Int) {
         do {
             try database.adjustWater(forDayKey: selectedDayKey, deltaMl: deltaMl)
+        } catch {
+            errorMessage = "Wasser konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    func adjustTodayWater(deltaMl: Int) {
+        let todayKey = DayKeyFormatter.string(from: Date())
+        do {
+            try database.adjustWater(forDayKey: todayKey, deltaMl: deltaMl)
         } catch {
             errorMessage = "Wasser konnte nicht gespeichert werden: \(error.localizedDescription)"
         }
@@ -153,6 +181,22 @@ final class WellnessStore: ObservableObject {
             try database.deleteReadinessLog(id: id)
         } catch {
             errorMessage = "Eintrag konnte nicht gelöscht werden: \(error.localizedDescription)"
+        }
+    }
+
+    func saveSaunaSession(_ session: SaunaSession) {
+        do {
+            try database.saveSaunaSession(session)
+        } catch {
+            errorMessage = "Sauna-Session konnte nicht gespeichert werden: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteSaunaSession(id: String) {
+        do {
+            try database.deleteSaunaSession(id: id)
+        } catch {
+            errorMessage = "Sauna-Session konnte nicht gelöscht werden: \(error.localizedDescription)"
         }
     }
 }

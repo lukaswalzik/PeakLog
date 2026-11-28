@@ -372,6 +372,29 @@ enum Migrations {
             try SeedData.insertDefaultExercises(in: db)
         }
 
+        migrator.registerMigration("v14_sauna_sessions") { db in
+            try db.create(table: "sauna_sessions") { t in
+                t.column("id", .text).primaryKey()
+                t.column("startedAt", .datetime).notNull()
+                t.column("saunaType", .text).notNull().defaults(to: "finnish")
+                t.column("temperatureCelsius", .integer).notNull().defaults(to: 90)
+                t.column("rounds", .integer).notNull().defaults(to: 3)
+                t.column("totalDurationMinutes", .integer).notNull().defaults(to: 30)
+                t.column("coldPlungeDone", .boolean).notNull().defaults(to: false)
+                t.column("coldPlungeMinutes", .integer).notNull().defaults(to: 0)
+                t.column("avgHeartRate", .integer)
+                t.column("maxHeartRate", .integer)
+                t.column("feeling", .integer).notNull().defaults(to: 4)
+                t.column("notes", .text)
+            }
+
+            try db.create(
+                index: "idx_sauna_sessions_startedAt",
+                on: "sauna_sessions",
+                columns: ["startedAt"]
+            )
+        }
+
         return migrator
     }
 }

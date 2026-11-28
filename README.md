@@ -76,6 +76,7 @@
 
 ### Wellness, Oura Ring & Fortschritt
 - **Oura Ring (API v2, OAuth2):** Synchronisiert Readiness, Schlaf, HRV, Ruhepuls, Aktivität, Stress, SpO2 und Workouts direkt in die App.
+- **Sauna & Kälte-Tracker:** Eigener **Live Sauna-Timer** (Hitze- vs. Abkühlphasen, Gang-Zähler, Live-Puls-Anzeige inkl. Hochpuls-Hinweis & +500 ml Wasser-Bonus) sowie manuelles Logging (Finnisch, Bio-Sauna, Dampfbad, Infrarot, Temperatur, Gänge, Kaltdusche/Eisbad, Erholungsgefühl & 8-Wochen-Balkendiagramm).
 - **Körperfortschritt:** Körpergewicht mit **interaktivem Vorher/Nachher-Wisch-Slider** & Nebeneinander-Vergleich (inkl. Gewichts-, Zeit- & **US-Navy-KFA-Differenz**, Thumbnail-Auswahlleiste & teilbarer PeakLog Transformation Card), Körpermaße (Brust, Taille, Hals, Arm, Oberschenkel) inkl. **US-Navy-KFA & FFMI**.
 - **Motivation & Analyse:** Fortschritts-Dashboard (1RM- & Gewichtstrends), wöchentliche Muskel-Heatmap, Kraftstandards, **PeakLog Wrapped**, Trainingskalender, Level/XP/Streaks, Meilensteine und lokale Erinnerungen.
 
