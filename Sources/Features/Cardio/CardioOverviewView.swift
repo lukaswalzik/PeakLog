@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CardioOverviewView: View {
     @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var activeCardioManager: ActiveCardioManager
 
     enum RangeFilter: String, CaseIterable, Identifiable {
         case days7 = "7T"
@@ -22,8 +23,6 @@ struct CardioOverviewView: View {
 
     @State private var selectedRange: RangeFilter = .days30
     @State private var isShowingManualForm: Bool = false
-    @State private var isShowingLiveTimer: Bool = false
-    @State private var plannedSessionToStart: CardioPlanSession? = nil
     @State private var editingSession: CardioSession? = nil
     @State private var sessionToDelete: CardioSession? = nil
 
@@ -40,7 +39,11 @@ struct CardioOverviewView: View {
             VStack(spacing: 16) {
                 quickActionsRow
                 CardioPlansSectionView { planned in
-                    plannedSessionToStart = planned
+                    if activeCardioManager.hasActiveSession {
+                        activeCardioManager.isPresentingSheet = true
+                    } else {
+                        activeCardioManager.start(plannedSession: planned)
+                    }
                 }
                 zonesChartCard
                 sessionsSection
@@ -50,16 +53,6 @@ struct CardioOverviewView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .sheet(isPresented: $isShowingManualForm) {
             CardioFormView { session in
-                cardioStore.save(session)
-            }
-        }
-        .sheet(isPresented: $isShowingLiveTimer) {
-            LiveCardioTimerView { session in
-                cardioStore.save(session)
-            }
-        }
-        .sheet(item: $plannedSessionToStart) { planned in
-            LiveCardioTimerView(plannedSession: planned) { session in
                 cardioStore.save(session)
             }
         }
@@ -91,24 +84,34 @@ struct CardioOverviewView: View {
     private var quickActionsRow: some View {
         HStack(spacing: 10) {
             Button {
-                isShowingLiveTimer = true
+                if activeCardioManager.hasActiveSession {
+                    activeCardioManager.isPresentingSheet = true
+                } else {
+                    activeCardioManager.start()
+                }
             } label: {
-                Label("Live-Timer", systemImage: "stopwatch.fill")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                HStack(spacing: 6) {
+                    Image(systemName: "stopwatch.fill")
+                    Text(activeCardioManager.hasActiveSession ? "Cardio öffnen" : "Live-Timer")
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
 
             Button {
                 isShowingManualForm = true
             } label: {
-                Label("Eintragen", systemImage: "plus.circle.fill")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Eintragen")
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.bordered)
         }

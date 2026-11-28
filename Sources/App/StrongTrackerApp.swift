@@ -6,6 +6,7 @@ struct StrongTrackerApp: App {
     @StateObject private var exerciseStore: ExerciseStore
     @StateObject private var routineStore: RoutineStore
     @StateObject private var activeWorkoutManager: ActiveWorkoutManager
+    @StateObject private var activeCardioManager: ActiveCardioManager
     @StateObject private var restTimerManager: RestTimerManager
     @StateObject private var historyStore: HistoryStore
     @StateObject private var bodyweightStore: BodyweightStore
@@ -51,9 +52,17 @@ struct StrongTrackerApp: App {
         let nStore = NutritionStore(database: db)
         let wStore = WellnessStore(database: db)
 
+        let cardioManager = ActiveCardioManager()
+        cardioManager.bind(
+            cardioStore: cStore,
+            heartRateReceiver: hrReceiver,
+            healthKitService: hkService
+        )
+
         let activityManager = WorkoutLiveActivityManager()
         activityManager.bind(
             workoutManager: workoutManager,
+            cardioManager: cardioManager,
             restTimerManager: timerManager,
             heartRateReceiver: hrReceiver,
             cardioStore: cStore
@@ -72,6 +81,7 @@ struct StrongTrackerApp: App {
         _exerciseStore = StateObject(wrappedValue: ExerciseStore(database: db))
         _routineStore = StateObject(wrappedValue: rStore)
         _activeWorkoutManager = StateObject(wrappedValue: workoutManager)
+        _activeCardioManager = StateObject(wrappedValue: cardioManager)
         _restTimerManager = StateObject(wrappedValue: timerManager)
         _historyStore = StateObject(wrappedValue: hStore)
         _bodyweightStore = StateObject(wrappedValue: bwStore)
@@ -97,6 +107,7 @@ struct StrongTrackerApp: App {
                 .environmentObject(exerciseStore)
                 .environmentObject(routineStore)
                 .environmentObject(activeWorkoutManager)
+                .environmentObject(activeCardioManager)
                 .environmentObject(restTimerManager)
                 .environmentObject(historyStore)
                 .environmentObject(bodyweightStore)

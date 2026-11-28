@@ -10,6 +10,7 @@ struct RootTabView: View {
     }
 
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+    @EnvironmentObject private var activeCardioManager: ActiveCardioManager
     @EnvironmentObject private var restTimerManager: RestTimerManager
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
     @EnvironmentObject private var themeManager: ThemeManager
@@ -54,21 +55,38 @@ struct RootTabView: View {
                     .tag(Tab.profile)
             }
 
-            if let detail = activeWorkoutManager.activeWorkout, !activeWorkoutManager.isPresentingSheet {
-                ActiveWorkoutBanner(
-                    detail: detail,
-                    restTimerManager: restTimerManager,
-                    heartRateReceiver: heartRateReceiver
-                ) {
-                    activeWorkoutManager.isPresentingSheet = true
+            VStack(spacing: 8) {
+                if activeCardioManager.hasActiveSession && !activeCardioManager.isPresentingSheet {
+                    ActiveCardioBanner(
+                        cardioManager: activeCardioManager,
+                        heartRateReceiver: heartRateReceiver
+                    ) {
+                        activeCardioManager.isPresentingSheet = true
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 58)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+
+                if let detail = activeWorkoutManager.activeWorkout, !activeWorkoutManager.isPresentingSheet {
+                    ActiveWorkoutBanner(
+                        detail: detail,
+                        restTimerManager: restTimerManager,
+                        heartRateReceiver: heartRateReceiver
+                    ) {
+                        activeWorkoutManager.isPresentingSheet = true
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 58)
         }
         .sheet(isPresented: $activeWorkoutManager.isPresentingSheet) {
             ActiveWorkoutView()
+                .tint(themeManager.preset.accentColor)
+                .preferredColorScheme(themeManager.appearance.colorScheme)
+        }
+        .sheet(isPresented: $activeCardioManager.isPresentingSheet) {
+            LiveCardioTimerView()
                 .tint(themeManager.preset.accentColor)
                 .preferredColorScheme(themeManager.appearance.colorScheme)
         }
@@ -87,6 +105,10 @@ struct RootTabView: View {
             if url.host == "active-workout" {
                 if activeWorkoutManager.hasActiveWorkout {
                     activeWorkoutManager.isPresentingSheet = true
+                }
+            } else if url.host == "active-cardio" {
+                if activeCardioManager.hasActiveSession {
+                    activeCardioManager.isPresentingSheet = true
                 }
             } else if url.host == "tab" {
                 switch url.lastPathComponent {
@@ -191,6 +213,99 @@ private struct ActiveWorkoutBanner: View {
     }
 }
 
+private struct ActiveCardioBanner: View {
+    @ObservedObject var cardioManager: ActiveCardioManager
+    @ObservedObject var heartRateReceiver: HeartRateReceiver
+    let onTap: () -> Void
+
+    private var formattedElapsed: String {
+        let secs = cardioManager.elapsedSeconds
+        let hours = secs / 3600
+        let mins = (secs % 3600) / 60
+        let rem = secs % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, mins, rem)
+        }
+        return String(format: "%02d:%02d", mins, rem)
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(cardioManager.activityType.accentColor.opacity(0.18))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: cardioManager.activityType.systemImage)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(cardioManager.activityType.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(cardioManager.sessionTitle)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 5) {
+                        Text(formattedElapsed)
+                            .monospacedDigit()
+                        if !cardioManager.isRunning {
+                            Text("· Pausiert")
+                                .foregroundColor(.orange)
+                        } else if let target = cardioManager.plannedSession?.targetDurationMinutes {
+                            Text("/ \(target) min")
+                                .monospacedDigit()
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                if let bpm = heartRateReceiver.currentBPM {
+                    HStack(spacing: 3) {
+                        Image(systemName: "heart.fill")
+                            .font(.caption2)
+                        Text("\(bpm)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(cardioManager.currentZone.color.opacity(0.18))
+                    .foregroundColor(cardioManager.currentZone.color)
+                    .clipShape(Capsule())
+                }
+
+                Text(cardioManager.currentZone.shortName)
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(cardioManager.currentZone.color.opacity(0.16))
+                    .foregroundColor(cardioManager.currentZone.color)
+                    .clipShape(Capsule())
+
+                Image(systemName: "chevron.up")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(cardioManager.activityType.accentColor)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct RootTabView_Previews: PreviewProvider {
     static var previews: some View {
         let db = AppDatabase.makeInMemory()
@@ -198,6 +313,7 @@ struct RootTabView_Previews: PreviewProvider {
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(RoutineStore(database: db))
             .environmentObject(ActiveWorkoutManager(database: db))
+            .environmentObject(ActiveCardioManager())
             .environmentObject(RestTimerManager())
             .environmentObject(HistoryStore(database: db))
             .environmentObject(BodyweightStore(database: db))

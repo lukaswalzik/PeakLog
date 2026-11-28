@@ -8,15 +8,15 @@ struct WorkoutLiveActivityWidget: Widget {
             LockScreenWorkoutBannerView(context: context)
                 .activityBackgroundTint(Color(red: 0.07, green: 0.09, blue: 0.16).opacity(0.92))
                 .activitySystemActionForegroundColor(.white)
-                .widgetURL(URL(string: "strongtracker://active-workout"))
+                .widgetURL(deepLinkURL(for: context.state))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 5) {
-                            Image(systemName: "dumbbell.fill")
+                            Image(systemName: context.state.activityIconName)
                                 .font(.caption2)
-                                .foregroundColor(.cyan)
+                                .foregroundColor(context.state.isCardio ? .green : .cyan)
                             Text(context.state.workoutName)
                                 .font(.caption)
                                 .fontWeight(.bold)
@@ -25,13 +25,20 @@ struct WorkoutLiveActivityWidget: Widget {
                         }
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(Color.green)
+                                .fill(context.state.isPaused ? Color.orange : Color.green)
                                 .frame(width: 6, height: 6)
-                            Text(context.attributes.startedAt, style: .timer)
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .monospacedDigit()
-                                .foregroundColor(.white.opacity(0.8))
+                            if context.state.isPaused {
+                                Text("Pausiert")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text(context.state.effectiveTimerStartDate, style: .timer)
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .monospacedDigit()
+                                    .foregroundColor(.white.opacity(0.85))
+                            }
                         }
                     }
                     .padding(.leading, 4)
@@ -63,6 +70,16 @@ struct WorkoutLiveActivityWidget: Widget {
                                     .foregroundColor(zoneColor(for: zone))
                                     .clipShape(Capsule())
                             }
+                        } else if context.state.isCardio {
+                            if let zone = context.state.heartRateZoneShort {
+                                Text(zone)
+                                    .font(.headline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(zoneColor(for: zone))
+                                Text("Zone")
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
                         } else {
                             Text("\(context.state.completedSets)/\(context.state.totalSets)")
                                 .font(.headline)
@@ -78,67 +95,33 @@ struct WorkoutLiveActivityWidget: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let restInterval = context.state.activeRestInterval {
-                            HStack(spacing: 8) {
-                                Image(systemName: "timer")
-                                    .font(.caption)
-                                    .foregroundColor(.cyan)
-                                Text("Pause")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white.opacity(0.9))
-
-                                ProgressView(timerInterval: restInterval, countsDown: true) {
-                                    EmptyView()
-                                } currentValueLabel: {
-                                    EmptyView()
-                                }
-                                .progressViewStyle(.linear)
-                                .tint(.cyan)
-
-                                Text(timerInterval: restInterval, countsDown: true)
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                    .monospacedDigit()
-                                    .foregroundColor(.cyan)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(width: 48, alignment: .trailing)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.cyan.opacity(0.16))
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
-
-                        HStack(spacing: 8) {
-                            if let exercise = context.state.currentExerciseName, !exercise.isEmpty {
-                                Text(exercise)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.white.opacity(0.9))
-                                    .lineLimit(1)
-                            } else {
-                                Text("Training aktiv")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.75))
-                            }
-
-                            Spacer(minLength: 4)
-
-                            Text("\(context.state.completedSets)/\(context.state.totalSets) Sätze · \(formattedVolume(context.state.totalVolumeKg))")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .monospacedDigit()
-                                .foregroundColor(.white.opacity(0.75))
-                                .lineLimit(1)
-                        }
+                    if context.state.isCardio {
+                        cardioExpandedBottom(context: context)
+                    } else {
+                        strengthExpandedBottom(context: context)
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.top, 2)
                 }
             } compactLeading: {
-                if let restInterval = context.state.activeRestInterval {
+                if context.state.isCardio {
+                    HStack(spacing: 4) {
+                        Image(systemName: context.state.activityIconName)
+                            .font(.caption2)
+                            .foregroundColor(context.state.isPaused ? .orange : .green)
+                        if context.state.isPaused {
+                            Text("Pause")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.orange)
+                        } else {
+                            Text(context.state.effectiveTimerStartDate, style: .timer)
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .monospacedDigit()
+                                .foregroundColor(.white)
+                                .frame(maxWidth: 44, alignment: .leading)
+                        }
+                    }
+                } else if let restInterval = context.state.activeRestInterval {
                     HStack(spacing: 3) {
                         Image(systemName: "timer")
                             .font(.caption2)
@@ -174,8 +157,13 @@ struct WorkoutLiveActivityWidget: Widget {
                             .monospacedDigit()
                             .foregroundColor(zoneColor(for: context.state.heartRateZoneShort))
                     }
+                } else if context.state.isCardio {
+                    Text(context.state.heartRateZoneShort ?? "Z2")
+                        .font(.caption2)
+                        .fontWeight(.heavy)
+                        .foregroundColor(zoneColor(for: context.state.heartRateZoneShort))
                 } else {
-                    Text(context.attributes.startedAt, style: .timer)
+                    Text(context.state.effectiveTimerStartDate, style: .timer)
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .monospacedDigit()
@@ -184,7 +172,13 @@ struct WorkoutLiveActivityWidget: Widget {
                         .frame(maxWidth: 44, alignment: .trailing)
                 }
             } minimal: {
-                if let restInterval = context.state.activeRestInterval {
+                if let bpm = context.state.heartRateBPM {
+                    Text("\(bpm)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .monospacedDigit()
+                        .foregroundColor(zoneColor(for: context.state.heartRateZoneShort))
+                } else if let restInterval = context.state.activeRestInterval {
                     ProgressView(timerInterval: restInterval, countsDown: true) {
                         EmptyView()
                     } currentValueLabel: {
@@ -194,21 +188,141 @@ struct WorkoutLiveActivityWidget: Widget {
                     }
                     .progressViewStyle(.circular)
                     .tint(.cyan)
-                } else if let bpm = context.state.heartRateBPM {
-                    Text("\(bpm)")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .monospacedDigit()
-                        .foregroundColor(zoneColor(for: context.state.heartRateZoneShort))
                 } else {
-                    Image(systemName: "dumbbell.fill")
+                    Image(systemName: context.state.activityIconName)
                         .font(.caption2)
-                        .foregroundColor(.cyan)
+                        .foregroundColor(context.state.isCardio ? .green : .cyan)
                 }
             }
-            .keylineTint(context.state.activeRestInterval != nil ? .cyan : (context.state.heartRateBPM != nil ? .red : .blue))
-            .widgetURL(URL(string: "strongtracker://active-workout"))
+            .keylineTint(
+                context.state.activeRestInterval != nil
+                    ? .cyan
+                    : (context.state.heartRateBPM != nil
+                        ? zoneColor(for: context.state.heartRateZoneShort)
+                        : (context.state.isCardio ? .green : .blue))
+            )
+            .widgetURL(deepLinkURL(for: context.state))
         }
+    }
+
+    @ViewBuilder
+    private func cardioExpandedBottom(context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let targetMins = context.state.targetDurationMinutes, targetMins > 0, !context.state.isPaused {
+                let targetEnd = context.state.effectiveTimerStartDate.addingTimeInterval(TimeInterval(targetMins * 60))
+                if targetEnd > context.state.effectiveTimerStartDate {
+                    HStack(spacing: 8) {
+                        Text("Ziel \(targetMins) Min")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white.opacity(0.8))
+
+                        ProgressView(timerInterval: context.state.effectiveTimerStartDate...targetEnd, countsDown: false) {
+                            EmptyView()
+                        } currentValueLabel: {
+                            EmptyView()
+                        }
+                        .progressViewStyle(.linear)
+                        .tint(zoneColor(for: context.state.targetZoneShort ?? context.state.heartRateZoneShort))
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                if let subtitle = context.state.currentExerciseName, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                } else {
+                    Text("Cardio aktiv")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.75))
+                }
+
+                Spacer(minLength: 4)
+
+                if let guidance = context.state.targetZoneGuidance {
+                    Text(guidance)
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(guidanceColor(guidance).opacity(0.24))
+                        .foregroundColor(guidanceColor(guidance))
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func strengthExpandedBottom(context: ActivityViewContext<WorkoutActivityAttributes>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let restInterval = context.state.activeRestInterval {
+                HStack(spacing: 8) {
+                    Image(systemName: "timer")
+                        .font(.caption)
+                        .foregroundColor(.cyan)
+                    Text("Pause")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white.opacity(0.9))
+
+                    ProgressView(timerInterval: restInterval, countsDown: true) {
+                        EmptyView()
+                    } currentValueLabel: {
+                        EmptyView()
+                    }
+                    .progressViewStyle(.linear)
+                    .tint(.cyan)
+
+                    Text(timerInterval: restInterval, countsDown: true)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .monospacedDigit()
+                        .foregroundColor(.cyan)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 48, alignment: .trailing)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.cyan.opacity(0.16))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            HStack(spacing: 8) {
+                if let exercise = context.state.currentExerciseName, !exercise.isEmpty {
+                    Text(exercise)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                } else {
+                    Text("Training aktiv")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.75))
+                }
+
+                Spacer(minLength: 4)
+
+                Text("\(context.state.completedSets)/\(context.state.totalSets) Sätze · \(formattedVolume(context.state.totalVolumeKg))")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.75))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 2)
+    }
+
+    private func deepLinkURL(for state: WorkoutActivityAttributes.ContentState) -> URL? {
+        URL(string: state.isCardio ? "strongtracker://active-cardio" : "strongtracker://active-workout")
     }
 
     private func zoneColor(for shortName: String?) -> Color {
@@ -220,6 +334,12 @@ struct WorkoutLiveActivityWidget: Widget {
         case "Z5": return .red
         default: return .red
         }
+    }
+
+    private func guidanceColor(_ guidance: String) -> Color {
+        if guidance.contains("Zielbereich") { return .green }
+        if guidance.contains("zügiger") { return .cyan }
+        return .orange
     }
 
     private func formattedVolume(_ kg: Double) -> String {
@@ -264,16 +384,15 @@ private struct LockScreenWorkoutBannerView: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [
-                                    Color(red: 0.11, green: 0.36, blue: 0.92),
-                                    Color(red: 0.28, green: 0.20, blue: 0.85)
-                                ],
+                                colors: context.state.isCardio
+                                    ? [Color(red: 0.05, green: 0.58, blue: 0.48), Color(red: 0.08, green: 0.40, blue: 0.65)]
+                                    : [Color(red: 0.11, green: 0.36, blue: 0.92), Color(red: 0.28, green: 0.20, blue: 0.85)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 36, height: 36)
-                    Image(systemName: "dumbbell.fill")
+                    Image(systemName: context.state.activityIconName)
                         .font(.subheadline)
                         .foregroundColor(.white)
                 }
@@ -291,7 +410,7 @@ private struct LockScreenWorkoutBannerView: View {
                             .foregroundColor(.white.opacity(0.75))
                             .lineLimit(1)
                     } else {
-                        Text("PeakLog · Aktives Training")
+                        Text(context.state.isCardio ? "PeakLog · Live Cardio" : "PeakLog · Aktives Training")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
                             .lineLimit(1)
@@ -324,19 +443,67 @@ private struct LockScreenWorkoutBannerView: View {
 
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color.green)
+                            .fill(context.state.isPaused ? Color.orange : Color.green)
                             .frame(width: 6, height: 6)
-                        Text(context.attributes.startedAt, style: .timer)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .monospacedDigit()
-                            .foregroundColor(.white.opacity(0.85))
-                            .multilineTextAlignment(.trailing)
+                        if context.state.isPaused {
+                            Text("Pausiert")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                        } else {
+                            Text(context.state.effectiveTimerStartDate, style: .timer)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                                .foregroundColor(.white.opacity(0.85))
+                                .multilineTextAlignment(.trailing)
+                        }
                     }
                 }
             }
 
-            if let restInterval = context.state.activeRestInterval {
+            if context.state.isCardio {
+                VStack(spacing: 5) {
+                    HStack {
+                        if let guidance = context.state.targetZoneGuidance {
+                            Text(guidance)
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(guidance.contains("Zielbereich") ? .green : (guidance.contains("zügiger") ? .cyan : .orange))
+                        } else if let targetZone = context.state.targetZoneShort {
+                            Text("Zielzone \(targetZone)")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white.opacity(0.8))
+                        } else {
+                            Text("Live Cardio läuft")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        Spacer()
+                        if let targetMins = context.state.targetDurationMinutes {
+                            Text("Ziel: \(targetMins) Min")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .monospacedDigit()
+                                .foregroundColor(.cyan)
+                        }
+                    }
+
+                    if let targetMins = context.state.targetDurationMinutes, targetMins > 0, !context.state.isPaused {
+                        let targetEnd = context.state.effectiveTimerStartDate.addingTimeInterval(TimeInterval(targetMins * 60))
+                        if targetEnd > context.state.effectiveTimerStartDate {
+                            ProgressView(timerInterval: context.state.effectiveTimerStartDate...targetEnd, countsDown: false) {
+                                EmptyView()
+                            } currentValueLabel: {
+                                EmptyView()
+                            }
+                            .progressViewStyle(.linear)
+                            .tint(hrColor)
+                        }
+                    }
+                }
+            } else if let restInterval = context.state.activeRestInterval {
                 HStack(spacing: 8) {
                     Label("Pause", systemImage: "timer")
                         .font(.caption)

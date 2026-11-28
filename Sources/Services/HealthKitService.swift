@@ -57,6 +57,7 @@ final class HealthKitService: ObservableObject {
     private let store: HKHealthStore?
     private weak var heartRateReceiver: HeartRateReceiver?
     private var anchoredHRQuery: HKAnchoredObjectQuery?
+    private var observerHRQuery: HKObserverQuery?
     private var pollTimer: Timer?
     private var seenSampleUUIDs: [UUID] = []
     private var seenUUIDSet: Set<UUID> = []
@@ -250,6 +251,29 @@ final class HealthKitService: ObservableObject {
         anchoredHRQuery = query
         store.execute(query)
 
+        // Also register an HKObserverQuery + immediate background delivery so iOS wakes
+        // PeakLog when new HealthKit HR samples arrive while the app is minimized (updating Dynamic Island).
+        if let existingObs = observerHRQuery {
+            store.stop(existingObs)
+            observerHRQuery = nil
+        }
+
+        let obsQuery = HKObserverQuery(sampleType: hrType, predicate: nil) { [weak self] _, completionHandler, error in
+            guard let self = self, error == nil else {
+                completionHandler()
+                return
+            }
+            self.pollLatestHeartRateSample(completion: {
+                // Give main-queue Combine subscribers & ActivityKit update a brief window before ending background wake
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    completionHandler()
+                }
+            })
+        }
+        observerHRQuery = obsQuery
+        store.execute(obsQuery)
+        store.enableBackgroundDelivery(for: hrType, frequency: .immediate) { _, _ in }
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.isStreamingHeartRate = true
@@ -258,10 +282,16 @@ final class HealthKitService: ObservableObject {
     }
 
     private func stopLiveHeartRateStreaming() {
-        if let store = store, let existing = anchoredHRQuery {
-            store.stop(existing)
+        if let store = store {
+            if let existing = anchoredHRQuery {
+                store.stop(existing)
+            }
+            if let existingObs = observerHRQuery {
+                store.stop(existingObs)
+            }
         }
         anchoredHRQuery = nil
+        observerHRQuery = nil
         DispatchQueue.main.async { [weak self] in
             self?.pollTimer?.invalidate()
             self?.pollTimer = nil
@@ -279,14 +309,15 @@ final class HealthKitService: ObservableObject {
         pollLatestHeartRateSample()
     }
 
-    private func pollLatestHeartRateSample() {
+    private func pollLatestHeartRateSample(completion: (() -> Void)? = nil) {
         guard isConnected && liveHeartRateEnabled,
               let store = store,
               let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion?()
             return
         }
 
-        let startDate = Date().addingTimeInterval(-20)
+        let startDate = Date().addingTimeInterval(-30)
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: nil, options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
 
@@ -297,6 +328,45 @@ final class HealthKitService: ObservableObject {
             sortDescriptors: [sort]
         ) { [weak self] _, samples, _ in
             self?.processHeartRateSamples(samples)
+            completion?()
+        }
+        store.execute(query)
+    }
+
+    /// Fetches all HealthKit heart rate samples in a given time range (used to backfill
+    /// samples written while PeakLog was minimized during a cardio or strength session).
+    func fetchHeartRateSamples(
+        from startDate: Date,
+        to endDate: Date,
+        completion: @escaping ([(date: Date, bpm: Int)]) -> Void
+    ) {
+        guard isAvailable,
+              isConnected,
+              let store = store,
+              let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion([])
+            return
+        }
+
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: true)
+
+        let query = HKSampleQuery(
+            sampleType: hrType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [sort]
+        ) { _, samples, _ in
+            guard let quantitySamples = samples as? [HKQuantitySample] else {
+                completion([])
+                return
+            }
+            let mapped: [(date: Date, bpm: Int)] = quantitySamples.compactMap { sample in
+                let bpm = Int(sample.quantity.doubleValue(for: Self.bpmUnit).rounded())
+                guard HeartRateReceiver.validBPMRange.contains(bpm) else { return nil }
+                return (sample.endDate, bpm)
+            }
+            completion(mapped)
         }
         store.execute(query)
     }

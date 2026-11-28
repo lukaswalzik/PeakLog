@@ -2,66 +2,32 @@ import SwiftUI
 import UIKit
 
 struct LiveCardioTimerView: View {
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var cardioStore: CardioStore
+    @EnvironmentObject private var activeCardioManager: ActiveCardioManager
     @EnvironmentObject private var heartRateReceiver: HeartRateReceiver
 
-    let plannedSession: CardioPlanSession?
-    let onFinish: (CardioSession) -> Void
-
-    @State private var activityType: CardioActivityType
-    @State private var currentZone: HeartRateZone
-    @State private var autoZoneEnabled: Bool = true
-    @State private var isRunning: Bool = true
-    @State private var startedAt: Date = Date()
-    @State private var elapsedSeconds: Int = 0
-    @State private var hasTriggeredGoalHaptic: Bool = false
-    @State private var zoneSeconds: [HeartRateZone: Int] = [
-        .z1: 0, .z2: 0, .z3: 0, .z4: 0, .z5: 0
-    ]
-    @State private var hrSampleCount: Int = 0
-    @State private var hrBpmSum: Int = 0
-    @State private var hrMaxBpm: Int? = nil
-    @State private var ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-
-    init(
-        plannedSession: CardioPlanSession? = nil,
-        onFinish: @escaping (CardioSession) -> Void
-    ) {
-        self.plannedSession = plannedSession
-        self.onFinish = onFinish
-        _activityType = State(initialValue: plannedSession?.activityType ?? .walking)
-        _currentZone = State(initialValue: plannedSession?.targetZone ?? .z2)
-    }
-
-    private var isAutoZoneActive: Bool {
-        autoZoneEnabled && heartRateReceiver.hasLiveSignal
-    }
-
-    private var avgRecordedHeartRate: Int? {
-        guard hrSampleCount > 0 else { return nil }
-        return Int((Double(hrBpmSum) / Double(hrSampleCount)).rounded())
-    }
+    @State private var isShowingDiscardAlert: Bool = false
 
     private var formattedTotalTime: String {
-        let hours = elapsedSeconds / 3600
-        let mins = (elapsedSeconds % 3600) / 60
-        let secs = elapsedSeconds % 60
+        let secs = activeCardioManager.elapsedSeconds
+        let hours = secs / 3600
+        let mins = (secs % 3600) / 60
+        let rem = secs % 60
         if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, mins, secs)
+            return String(format: "%d:%02d:%02d", hours, mins, rem)
         }
-        return String(format: "%02d:%02d", mins, secs)
+        return String(format: "%02d:%02d", mins, rem)
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    if let planned = plannedSession {
+                    if let planned = activeCardioManager.plannedSession {
                         plannedSessionBanner(planned)
                     }
 
-                    Picker("Sportart", selection: $activityType) {
+                    Picker("Sportart", selection: $activeCardioManager.activityType) {
                         ForEach(CardioActivityType.allCases) { type in
                             Text(type.displayName).tag(type)
                         }
@@ -94,7 +60,8 @@ struct LiveCardioTimerView: View {
                                 .foregroundColor(.red)
                                 .clipShape(Capsule())
 
-                                if let avg = avgRecordedHeartRate, let maxHR = hrMaxBpm {
+                                if let avg = activeCardioManager.avgRecordedHeartRate,
+                                   let maxHR = activeCardioManager.hrMaxBpm {
                                     Text("Ø \(avg) · Max \(maxHR)")
                                         .font(.caption)
                                         .fontWeight(.semibold)
@@ -103,7 +70,7 @@ struct LiveCardioTimerView: View {
                                 }
                             }
                             .padding(.top, 2)
-                        } else if autoZoneEnabled {
+                        } else if activeCardioManager.autoZoneEnabled {
                             HStack(spacing: 5) {
                                 Image(systemName: "heart")
                                     .font(.caption)
@@ -116,32 +83,39 @@ struct LiveCardioTimerView: View {
 
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(currentZone.color)
+                                .fill(activeCardioManager.currentZone.color)
                                 .frame(width: 10, height: 10)
-                            Text(currentZone.title)
+                            Text(activeCardioManager.currentZone.title)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(currentZone.color)
-                            Text("· \(currentZone.bpmRangeText(maxHR: cardioStore.maxHeartRate))")
+                                .foregroundColor(activeCardioManager.currentZone.color)
+                            Text("· \(activeCardioManager.currentZone.bpmRangeText(maxHR: cardioStore.maxHeartRate))")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
+
+                        Text("Du kannst dieses Fenster oder PeakLog jederzeit minimieren – Timer & Dynamic Island laufen weiter.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 4)
+                            .padding(.horizontal, 8)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 22)
                     .strongCard()
 
-                    // Auto-Zone toggle + zone display
+                    // Auto-Zone toggle + zone list
                     VStack(alignment: .leading, spacing: 10) {
-                        Toggle(isOn: $autoZoneEnabled) {
+                        Toggle(isOn: $activeCardioManager.autoZoneEnabled) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("HF-Zone automatisch nach Puls")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                 Text(
-                                    isAutoZoneActive
+                                    activeCardioManager.isAutoZoneActive
                                         ? "Aktiv · Zone wechselt automatisch (Max-HF \(cardioStore.maxHeartRate) bpm)"
-                                        : (autoZoneEnabled
+                                        : (activeCardioManager.autoZoneEnabled
                                             ? "Bereit · übernimmt automatisch sobald Live-Puls ankommt (aktuell manuell wählbar)"
                                             : "Aus · tippe eine Zone manuell an")
                                 )
@@ -154,12 +128,10 @@ struct LiveCardioTimerView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                         ForEach(HeartRateZone.allCases) { zone in
-                            let secs = zoneSeconds[zone] ?? 0
-                            let isSelected = currentZone == zone
+                            let secs = activeCardioManager.zoneSeconds[zone] ?? 0
+                            let isSelected = activeCardioManager.currentZone == zone
                             Button {
-                                guard !isAutoZoneActive else { return }
-                                currentZone = zone
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                activeCardioManager.selectZoneManually(zone)
                             } label: {
                                 HStack(spacing: 12) {
                                     Text(zone.shortName)
@@ -176,7 +148,7 @@ struct LiveCardioTimerView: View {
                                                 .font(.subheadline)
                                                 .fontWeight(.semibold)
                                                 .foregroundColor(.primary)
-                                            if isSelected && isAutoZoneActive {
+                                            if isSelected && activeCardioManager.isAutoZoneActive {
                                                 Text("AUTO")
                                                     .font(.caption2)
                                                     .fontWeight(.heavy)
@@ -218,73 +190,91 @@ struct LiveCardioTimerView: View {
 
                     HStack(spacing: 12) {
                         Button {
-                            isRunning.toggle()
+                            activeCardioManager.togglePause()
                         } label: {
-                            Label(isRunning ? "Pause" : "Weiter", systemImage: isRunning ? "pause.fill" : "play.fill")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
+                            HStack(spacing: 6) {
+                                Image(systemName: activeCardioManager.isRunning ? "pause.fill" : "play.fill")
+                                Text(activeCardioManager.isRunning ? "Pause" : "Weiter")
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                         }
                         .buttonStyle(.bordered)
 
                         Button {
-                            finishSession()
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            activeCardioManager.finish()
                         } label: {
-                            Label("Beenden", systemImage: "checkmark.circle.fill")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Speichern")
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
-                        .disabled(elapsedSeconds < 5)
+                        .disabled(activeCardioManager.elapsedSeconds < 5)
                     }
                     .padding(.top, 4)
+
+                    Button(role: .destructive) {
+                        isShowingDiscardAlert = true
+                    } label: {
+                        Text("Cardio-Einheit verwerfen")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.bordered)
                 }
                 .padding(16)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Live Cardio-Timer")
+            .navigationTitle("Live Cardio")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Verwerfen", role: .destructive) {
-                        dismiss()
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        activeCardioManager.isPresentingSheet = false
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.headline)
                     }
+                    .accessibilityLabel("Cardio minimieren")
                 }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Speichern") {
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        activeCardioManager.finish()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                    .disabled(activeCardioManager.elapsedSeconds < 5)
+                }
+            }
+            .alert("Cardio verwerfen?", isPresented: $isShowingDiscardAlert) {
+                Button("Verwerfen", role: .destructive) {
+                    activeCardioManager.discard()
+                }
+                Button("Weiter trainieren", role: .cancel) {}
+            } message: {
+                Text("Die aktuelle Cardio-Einheit wird nicht gespeichert.")
             }
             .onAppear {
-                if autoZoneEnabled, let bpm = heartRateReceiver.currentBPM {
-                    currentZone = HeartRateZone.clampedZone(for: bpm, maxHR: cardioStore.maxHeartRate)
-                }
-            }
-            .onReceive(ticker) { _ in
-                guard isRunning else { return }
-                elapsedSeconds += 1
-                zoneSeconds[currentZone, default: 0] += 1
-                if let targetMins = plannedSession?.targetDurationMinutes,
-                   !hasTriggeredGoalHaptic,
-                   elapsedSeconds >= targetMins * 60 {
-                    hasTriggeredGoalHaptic = true
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                }
-            }
-            .onReceive(heartRateReceiver.sampleSubject) { reading in
-                guard isRunning else { return }
-                hrSampleCount += 1
-                hrBpmSum += reading.bpm
-                hrMaxBpm = hrMaxBpm.map { max($0, reading.bpm) } ?? reading.bpm
-                if autoZoneEnabled {
-                    currentZone = HeartRateZone.clampedZone(for: reading.bpm, maxHR: cardioStore.maxHeartRate)
-                }
+                activeCardioManager.catchUpWallClock(now: Date())
             }
         }
     }
 
     private func plannedSessionBanner(_ planned: CardioPlanSession) -> some View {
         let targetSeconds = max(60, planned.targetDurationMinutes * 60)
-        let progress = min(1.0, Double(elapsedSeconds) / Double(targetSeconds))
-        let reachedGoal = elapsedSeconds >= targetSeconds
+        let progress = min(1.0, Double(activeCardioManager.elapsedSeconds) / Double(targetSeconds))
+        let reachedGoal = activeCardioManager.elapsedSeconds >= targetSeconds
         let targetBounds = planned.targetZone.percentBounds
         let lowerBPM = Int(round(Double(cardioStore.maxHeartRate) * targetBounds.0))
         let upperBPM = Int(round(Double(cardioStore.maxHeartRate) * targetBounds.1))
@@ -304,14 +294,17 @@ struct LiveCardioTimerView: View {
                 }
                 Spacer()
                 if reachedGoal {
-                    Label("Ziel erreicht!", systemImage: "checkmark.seal.fill")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.green.opacity(0.18))
-                        .foregroundColor(.green)
-                        .clipShape(Capsule())
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.seal.fill")
+                        Text("Ziel erreicht!")
+                    }
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.18))
+                    .foregroundColor(.green)
+                    .clipShape(Capsule())
                 } else {
                     Text("Ziel: \(planned.targetDurationMinutes) Min")
                         .font(.caption)
@@ -363,32 +356,5 @@ struct LiveCardioTimerView: View {
         let mins = seconds / 60
         let secs = seconds % 60
         return String(format: "%02d:%02d", mins, secs)
-    }
-
-    private func finishSession() {
-        var sessionNotes: String? = nil
-        if let planned = plannedSession {
-            if planned.intensityGuide.isEmpty {
-                sessionNotes = planned.title
-            } else {
-                sessionNotes = "\(planned.title) · \(planned.intensityGuide)"
-            }
-        }
-
-        let session = CardioSession(
-            activityType: activityType,
-            startedAt: startedAt,
-            durationSeconds: max(60, elapsedSeconds),
-            avgHeartRate: avgRecordedHeartRate,
-            maxHeartRate: hrMaxBpm,
-            zone1Seconds: zoneSeconds[.z1] ?? 0,
-            zone2Seconds: zoneSeconds[.z2] ?? 0,
-            zone3Seconds: zoneSeconds[.z3] ?? 0,
-            zone4Seconds: zoneSeconds[.z4] ?? 0,
-            zone5Seconds: zoneSeconds[.z5] ?? 0,
-            notes: sessionNotes
-        )
-        onFinish(session)
-        dismiss()
     }
 }

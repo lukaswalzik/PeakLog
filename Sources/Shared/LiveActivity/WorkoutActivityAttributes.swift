@@ -3,6 +3,8 @@ import Foundation
 
 struct WorkoutActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
+        var isCardio: Bool
+        var activityIconName: String
         var workoutName: String
         var currentExerciseName: String?
         var completedSets: Int
@@ -12,9 +14,15 @@ struct WorkoutActivityAttributes: ActivityAttributes {
         var heartRateZoneShort: String?
         var restStartDate: Date?
         var restEndDate: Date?
+        var isPaused: Bool
+        var effectiveTimerStartDate: Date
+        var targetDurationMinutes: Int?
+        var targetZoneShort: String?
+        var targetZoneGuidance: String?
 
         var activeRestInterval: ClosedRange<Date>? {
-            guard let start = restStartDate,
+            guard !isCardio,
+                  let start = restStartDate,
                   let end = restEndDate,
                   end > start,
                   end > Date() else {

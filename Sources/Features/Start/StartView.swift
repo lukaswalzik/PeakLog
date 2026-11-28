@@ -3,6 +3,7 @@ import SwiftUI
 struct StartView: View {
     @EnvironmentObject private var routineStore: RoutineStore
     @EnvironmentObject private var activeWorkoutManager: ActiveWorkoutManager
+    @EnvironmentObject private var activeCardioManager: ActiveCardioManager
     @EnvironmentObject private var historyStore: HistoryStore
     @EnvironmentObject private var cardioStore: CardioStore
     @EnvironmentObject private var bodyweightStore: BodyweightStore
@@ -15,8 +16,6 @@ struct StartView: View {
     @State private var routineToDelete: RoutineWithExercises? = nil
     @State private var isShowingAlreadyActiveAlert: Bool = false
     @State private var isShowingCardioForm: Bool = false
-    @State private var isShowingLiveCardio: Bool = false
-    @State private var plannedCardioToStart: CardioPlanSession? = nil
     @State private var isShowingManageGyms: Bool = false
 
     private var progressSummary: UserProgressSummary {
@@ -116,7 +115,11 @@ struct StartView: View {
                 ) {
                     CardioPlansSectionView(
                         onStartSession: { planned in
-                            plannedCardioToStart = planned
+                            if activeCardioManager.hasActiveSession {
+                                activeCardioManager.isPresentingSheet = true
+                            } else {
+                                activeCardioManager.start(plannedSession: planned)
+                            }
                         },
                         compactForStartTab: true,
                         startCollapsed: themeManager.compactStartScreen
@@ -158,16 +161,6 @@ struct StartView: View {
             }
             .sheet(isPresented: $isShowingCardioForm) {
                 CardioFormView { session in
-                    cardioStore.save(session)
-                }
-            }
-            .sheet(isPresented: $isShowingLiveCardio) {
-                LiveCardioTimerView { session in
-                    cardioStore.save(session)
-                }
-            }
-            .sheet(item: $plannedCardioToStart) { planned in
-                LiveCardioTimerView(plannedSession: planned) { session in
                     cardioStore.save(session)
                 }
             }
@@ -349,9 +342,16 @@ struct StartView: View {
 
                 Menu {
                     Button {
-                        isShowingLiveCardio = true
+                        if activeCardioManager.hasActiveSession {
+                            activeCardioManager.isPresentingSheet = true
+                        } else {
+                            activeCardioManager.start()
+                        }
                     } label: {
-                        Label("Live Cardio-Timer", systemImage: "stopwatch.fill")
+                        Label(
+                            activeCardioManager.hasActiveSession ? "Laufendes Cardio öffnen" : "Live Cardio-Timer",
+                            systemImage: "stopwatch.fill"
+                        )
                     }
                     Button {
                         isShowingCardioForm = true
@@ -593,6 +593,7 @@ struct StartView_Previews: PreviewProvider {
             .environmentObject(RoutineStore(database: db))
             .environmentObject(ExerciseStore(database: db))
             .environmentObject(ActiveWorkoutManager(database: db))
+            .environmentObject(ActiveCardioManager())
             .environmentObject(HistoryStore(database: db))
             .environmentObject(CardioStore(database: db))
             .environmentObject(BodyweightStore(database: db))
