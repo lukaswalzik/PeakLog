@@ -217,8 +217,10 @@ struct CardioPlansSectionView: View {
     private func sessionCard(_ session: CardioPlanSession) -> some View {
         let completedThisWeek = cardioStore.hasCompletedPlannedSessionThisWeek(session)
         let isExpanded = expandedSessionId == session.id
+        let buttonTint: Color = session.targetZone.color == .yellow ? .orange : session.activityType.accentColor
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 10) {
+            // Row 1: Icon + Title + Compact Start Pill
             HStack(alignment: .center, spacing: 10) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: session.activityType.systemImage)
@@ -237,56 +239,84 @@ struct CardioPlansSectionView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(session.title)
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
+                Text(session.title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    HStack(spacing: 6) {
-                        Label(session.timing.shortBadge, systemImage: session.timing.systemImage)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(session.timing.color.opacity(0.14))
-                            .foregroundColor(session.timing.color)
-                            .clipShape(Capsule())
-
-                        Text("\(session.targetDurationMinutes) Min")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .monospacedDigit()
-                            .foregroundColor(.secondary)
-
-                        Text("\(session.targetZone.shortName) · \(session.targetZone.bpmRangeText(maxHR: cardioStore.maxHeartRate))")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .monospacedDigit()
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(session.targetZone.color.opacity(0.16))
-                            .foregroundColor(session.targetZone.color)
-                            .clipShape(Capsule())
-                    }
-                }
-
-                Spacer(minLength: 4)
+                Spacer(minLength: 6)
 
                 Button {
                     onStartSession(session)
                 } label: {
-                    Label("Start", systemImage: "play.fill")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
+                    HStack(spacing: 5) {
+                        Image(systemName: "play.fill")
+                            .font(.caption2)
+                        Text("Start")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(buttonTint)
+                    .clipShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(session.targetZone.color == .yellow ? .orange : session.activityType.accentColor)
-                .controlSize(.small)
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
             }
 
+            // Row 2: Clean single-line metadata pills across full card width
+            HStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: session.timing.systemImage)
+                        .font(.caption2)
+                    Text(session.timing.shortBadge)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(session.timing.color.opacity(0.14))
+                .foregroundColor(session.timing.color)
+                .clipShape(Capsule())
+                .fixedSize(horizontal: true, vertical: false)
+
+                HStack(spacing: 3) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                    Text("\(session.targetDurationMinutes) Min")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(uiColor: .tertiarySystemFill))
+                .foregroundColor(.primary)
+                .clipShape(Capsule())
+                .fixedSize(horizontal: true, vertical: false)
+
+                Text("\(session.targetZone.shortName) · \(session.targetZone.bpmRangeText(maxHR: cardioStore.maxHeartRate))")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(session.targetZone.color.opacity(0.16))
+                    .foregroundColor(session.targetZone.color == .yellow ? .orange : session.targetZone.color)
+                    .clipShape(Capsule())
+
+                Spacer(minLength: 0)
+            }
+
+            // Row 3: Intensity guide + optional expandable details
             if !session.intensityGuide.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "gauge.medium")
@@ -294,17 +324,18 @@ struct CardioPlansSectionView: View {
                         .foregroundColor(.accentColor)
                     Text(session.intensityGuide)
                         .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                    Spacer()
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
                     if let notes = session.notes, !notes.isEmpty {
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 expandedSessionId = isExpanded ? nil : session.id
                             }
                         } label: {
-                            Image(systemName: isExpanded ? "chevron.up" : "info.circle")
-                                .font(.caption)
+                            Image(systemName: isExpanded ? "chevron.up.circle" : "info.circle")
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
@@ -317,9 +348,10 @@ struct CardioPlansSectionView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
             }
         }
-        .strongCard(padding: 12)
+        .strongCard(padding: 14)
     }
 
     private var emptyPlanCard: some View {

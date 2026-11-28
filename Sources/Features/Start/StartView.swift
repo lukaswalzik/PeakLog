@@ -228,91 +228,99 @@ struct StartView: View {
 
     private var heroQuickStartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text("Level \(progressSummary.level)")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.white.opacity(0.22))
-                            .foregroundColor(.white)
-                            .clipShape(Capsule())
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("Level \(progressSummary.level)")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.22))
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
 
-                        if progressSummary.weeklyStreak > 0 {
-                            Label("\(progressSummary.weeklyStreak) Wo. Streak", systemImage: "flame.fill")
+                    if progressSummary.weeklyStreak > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .font(.caption2)
+                            Text("\(progressSummary.weeklyStreak) Wo. Streak")
                                 .font(.caption)
                                 .fontWeight(.bold)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color.orange.opacity(0.28))
-                                .foregroundColor(.white)
-                                .clipShape(Capsule())
+                                .lineLimit(1)
                         }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.32))
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
                     }
 
-                    Text("Bereit fürs Training?")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding(.top, 2)
+                    Spacer(minLength: 4)
 
-                    Text("\(progressSummary.rankTitle) · \(progressSummary.sessionsThisWeek) Trainings diese Woche")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.85))
-                }
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        gymStore.selectedGymId = nil
-                    } label: {
-                        HStack {
-                            Text("Kein bestimmtes Gym")
-                            if gymStore.selectedGymId == nil {
-                                Image(systemName: "checkmark")
+                    Menu {
+                        Button {
+                            gymStore.selectedGymId = nil
+                        } label: {
+                            HStack {
+                                Text("Kein bestimmtes Gym")
+                                if gymStore.selectedGymId == nil {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
-                    }
 
-                    if !gymStore.gyms.isEmpty {
-                        Divider()
-                        ForEach(gymStore.gyms) { gym in
-                            Button {
-                                gymStore.selectedGymId = gym.id
-                            } label: {
-                                HStack {
-                                    Text(gym.name)
-                                    if gymStore.selectedGymId == gym.id {
-                                        Image(systemName: "checkmark")
+                        if !gymStore.gyms.isEmpty {
+                            Divider()
+                            ForEach(gymStore.gyms) { gym in
+                                Button {
+                                    gymStore.selectedGymId = gym.id
+                                } label: {
+                                    HStack {
+                                        Text(gym.name)
+                                        if gymStore.selectedGymId == gym.id {
+                                            Image(systemName: "checkmark")
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Divider()
-                    Button {
-                        isShowingManageGyms = true
+                        Divider()
+                        Button {
+                            isShowingManageGyms = true
+                        } label: {
+                            Label("Gyms verwalten…", systemImage: "plus.circle")
+                        }
                     } label: {
-                        Label("Gyms verwalten…", systemImage: "plus.circle")
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.caption2)
+                            Text(gymStore.selectedGym?.name ?? "Gym")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.20))
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin.and.ellipse")
-                        Text(gymStore.selectedGym?.name ?? "Gym")
-                            .lineLimit(1)
-                    }
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.20))
-                    .foregroundColor(.white)
-                    .clipShape(Capsule())
                 }
+
+                Text("Bereit fürs Training?")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(.top, 2)
+
+                Text("\(progressSummary.rankTitle) · \(progressSummary.sessionsThisWeek) Trainings diese Woche")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.85))
             }
 
             HStack(spacing: 10) {
@@ -395,9 +403,13 @@ struct StartView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Wochenrückblick (7 Tage)", systemImage: "chart.line.uptrend.xyaxis")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                HStack(spacing: 6) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .foregroundColor(.accentColor)
+                    Text("Wochenrückblick (7 Tage)")
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
                 Spacer()
                 if let delta = volumeDeltaText {
                     Text(delta)
@@ -550,9 +562,14 @@ private struct RoutineCardRow: View {
                 Button {
                     onStart()
                 } label: {
-                    Label("Starten", systemImage: "play.fill")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                    HStack(spacing: 5) {
+                        Image(systemName: "play.fill")
+                            .font(.caption)
+                        Text("Starten")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                    }
+                    .padding(.horizontal, 4)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
